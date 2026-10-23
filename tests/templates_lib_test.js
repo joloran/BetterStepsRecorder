@@ -6,7 +6,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { list, defaultFor, userDir } = require('../ui/src/main/templates-lib');
+const { list, defaultFor, forLanguage, userDir } = require('../ui/src/main/templates-lib');
 
 const fakeUserData = path.join(os.tmpdir(), 'bsr-tpl-lib-' + Date.now());
 fs.mkdirSync(fakeUserData, { recursive: true });
@@ -44,6 +44,26 @@ const mine = path.join(userDir(fakeUserData), 'acme-work-instruction.md');
 check('an explicit preference wins', defaultFor(projectRoot, fakeUserData, mine) === mine);
 check('a preference that no longer exists falls back',
       defaultFor(projectRoot, fakeUserData, '/gone/missing.docx').endsWith('.docx'));
+
+console.log('\nstock templates follow the selected language:');
+const stock = path.join(projectRoot, 'templates', 'corporate-sop.docx');
+const portuguese = path.join(projectRoot, 'templates', 'pt-BR', 'corporate-sop.docx');
+check('Portuguese default uses the Portuguese stock document',
+      defaultFor(projectRoot, fakeUserData, '', 'pt-BR') === portuguese);
+check('a stock preference follows a later language switch',
+      defaultFor(projectRoot, fakeUserData, stock, 'pt-BR') === portuguese);
+check('switching back resolves the English stock document',
+      forLanguage(projectRoot, portuguese, 'en') === stock);
+check('the Portuguese list contains one variant of each stock template',
+      list(projectRoot, fakeUserData, 'pt-BR').templates.filter((t) => t.origin === 'builtin')
+        .every((t) => path.dirname(t.path) === path.join(projectRoot, 'templates', 'pt-BR')));
+check('custom templates remain selected even with the same stock filename',
+      forLanguage(projectRoot, path.join(userDir(fakeUserData), 'corporate-sop.docx'), 'pt-BR')
+        === path.join(userDir(fakeUserData), 'corporate-sop.docx'));
+check('unknown locales fall back to English stock templates',
+      forLanguage(projectRoot, portuguese, 'xx') === stock);
+check('custom preferences remain selected in Portuguese',
+      defaultFor(projectRoot, fakeUserData, mine, 'pt-BR') === mine);
 
 fs.rmSync(fakeUserData, { recursive: true, force: true });
 console.log('\nmaking a stock template your own:');

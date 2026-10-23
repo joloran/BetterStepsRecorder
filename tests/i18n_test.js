@@ -13,7 +13,7 @@ const shared = path.join(__dirname, '..', 'ui', 'src', 'shared');
 const html = fs.readFileSync(path.join(shared, '..', 'renderer', 'index.html'), 'utf8');
 const catalogs = {};
 for (const locale of i18n.locales) {
-  catalogs[locale.code] = Object.assign({}, ...['ui', 'renderer', 'main'].map((area) =>
+  catalogs[locale.code] = Object.assign({}, ...['ui', 'renderer', 'main', 'export'].map((area) =>
     require(path.join(shared, 'locales', locale.code, area))));
 }
 const en = i18n.createTranslator('en');
@@ -101,7 +101,7 @@ const scriptPaths = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => 
 check('the translator is loaded before renderer code',
       scriptPaths.indexOf('../shared/i18n.js') < scriptPaths.indexOf('renderer.js'));
 for (const locale of i18n.locales) {
-  for (const area of ['ui', 'renderer', 'main']) {
+  for (const area of ['ui', 'renderer', 'main', 'export']) {
     const scriptPath = `../shared/locales/${locale.code}/${area}.js`;
     check(scriptPath + ' ships in the real page', scriptPaths.includes(scriptPath));
     vm.runInContext(fs.readFileSync(path.join(shared, 'locales', locale.code, area + '.js'), 'utf8'), browser);

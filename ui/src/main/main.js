@@ -15,6 +15,7 @@ const { buildLatex, gatherImages, writeImages } = require('./latex');
 const texzip = require('./texzip');
 const messages = require('./messages');
 const i18n = require('../shared/i18n');
+const { translator } = require('./export-language');
 const screenshots = require('./screenshots');
 const { toJpeg, toJpegFrom } = require('./transcode');
 const annotate = require('../renderer/annotate');
@@ -576,17 +577,18 @@ async function ensureSidecar() {
 }
 
 ipcMain.handle('templates:effective', () => ({
-  path: settings.values.templatePath
-     || templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData')) || '',
+  path: templatesLib.forLanguage(PROJECT_ROOT, settings.values.templatePath, settings.values.language)
+    || templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData'), '', settings.values.language),
   chosen: Boolean(settings.values.templatePath),
 }));
 
 ipcMain.handle('templates:list', () =>
-  templatesLib.list(PROJECT_ROOT, app.getPath('userData')));
+  templatesLib.list(PROJECT_ROOT, app.getPath('userData'), settings.values.language));
 
 ipcMain.handle('templates:duplicate', async (_e, { path: source } = {}) => {
-  const from = source || settings.values.templatePath
-            || templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData'));
+  const from = templatesLib.forLanguage(PROJECT_ROOT, source || settings.values.templatePath,
+    settings.values.language)
+    || templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData'), '', settings.values.language);
   const r = templatesLib.duplicate(from, app.getPath('userData'));
   if (!r.ok) {
     log.warn(r.error);
@@ -684,7 +686,7 @@ async function beginRecording(intent = {}) {
       purpose: intent.purpose || 'sop',
       templatePath: intent.purpose === 'sop'
         ? templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData'),
-                                  intent.templatePath || settings.values.templatePath)
+                                  intent.templatePath || settings.values.templatePath, settings.values.language)
         : '',
     });
   }
@@ -1545,9 +1547,11 @@ function htmlImages(s, { assetDir, assetHref }) {
  * Off unless enabled: most guides use one colour and need no key, and a
  * one-entry legend is clutter.
  */
-function legendFor(s) {
+function legendFor(s, language = settings.values.language) {
   if (!settings.values.showHighlightLegend) return [];
-  return annotate.legendFor(exportable(s), settings.values.highlightMeanings || {});
+  const tr = translator(language);
+  return annotate.legendFor(exportable(s), settings.values.highlightMeanings || {})
+    .map((entry) => ({ ...entry, name: tr(`export.color.${entry.id}`) }));
 }
 
 /** How the click should be marked, as chosen in Settings. */
@@ -1565,7 +1569,10 @@ async function runExport({ format, title }) {
     return { ok: false, error: t('main.export.nothing') };
   }
 
-  const safeTitle = (title || session.name || 'Recorded steps').trim() || 'Recorded steps';
+  // Snapshot the selected language before the save dialog or image work awaits.
+  const language = i18n.resolveLocale(settings.values.language);
+  const fallbackTitle = translator(language)('export.recordedSteps');
+  const safeTitle = (title || session.name || fallbackTitle).trim() || fallbackTitle;
   const brand = {
     name: settings.values.brandName,
     logo: settings.values.brandLogo,
@@ -1580,10 +1587,9 @@ async function runExport({ format, title }) {
   // first run - even though a perfectly good Word template was sitting in the
   // installation the whole time. defaultFor() was already doing this when a
   // recording starts; export simply never asked.
-  const templateForSession = session.templatePath
-    || settings.values.templatePath
-    || templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData'))
-    || '';
+  const templateForSession = templatesLib.forLanguage(PROJECT_ROOT,
+    session.templatePath || settings.values.templatePath, language)
+    || templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData'), '', language);
   if (format === 'template' && !templateForSession) {
     return { ok: false, error: t('main.export.noTemplate') };
   }
@@ -1623,8 +1629,8 @@ async function runExport({ format, title }) {
         assetHref: `${base}-images`,
       });
       fs.writeFileSync(out, buildHtml(session, {
-        title: safeTitle, brand, voice: voiceFor(session), imageSrc,
-        markerOpts: markerOptions(), legend: legendFor(session),
+        title: safeTitle, language, brand, voice: voiceFor(session), imageSrc,
+        markerOpts: markerOptions(), legend: legendFor(session, language),
       }), 'utf8');
       log.info(`exported html to ${out}`);
       return { ok: true, file: out, warning };
@@ -1633,7 +1639,8 @@ async function runExport({ format, title }) {
       const imageDir = `${path.basename(out, '.md')}-images`;
       const copied = copyImages(session, path.join(path.dirname(out), imageDir));
       fs.writeFileSync(out, buildMarkdown(session, {
-        title: safeTitle, imageDir, brand, voice: voiceFor(session),
+        title: safeTitle, language, imageDir, brand, voice: voiceFor(session),
+        legend: legendFor(session, language),
       }), 'utf8');
       log.info(`markdown export copied ${copied} images`);
 
@@ -1698,9 +1705,9 @@ async function runExport({ format, title }) {
       for (const data of gathered.bytes.values()) imageBytes += data.length;
 
       const tex = buildLatex(session, {
-        title: safeTitle,
+        title: safeTitle, language,
         voice: voiceFor(session),
-        legend: legendFor(session),
+        legend: legendFor(session, language),
         imageDir,
         standalone,
         // What the file ended up being called, so the header can say the line
@@ -1760,7 +1767,7 @@ async function runExport({ format, title }) {
       };
 
     } else if (format === 'pdf') {
-      const warning = await exportPdf(safeTitle, out, brand);
+      const warning = await exportPdf(safeTitle, out, brand, language);
       log.info(`exported pdf to ${out}`);
       return { ok: true, file: out, warning };
 
@@ -1798,12 +1805,12 @@ async function runExport({ format, title }) {
         }
 
         const { buffer, missing } = await docx.render(tpl, session, {
-          title: safeTitle,
+          title: safeTitle, language,
           brand,
           voice: voiceFor(session),
-          legend: legendFor(session),
+          legend: legendFor(session, language),
           images: marks.images,
-          redactionSummary: templating.redactionSummary(session.steps),
+          redactionSummary: templating.redactionSummary(session.steps, language),
         });
         fs.writeFileSync(out, buffer);
         log.info(`docx export: ${(buffer.length / 1024).toFixed(0)}KB, `
@@ -1825,8 +1832,8 @@ async function runExport({ format, title }) {
       const source = fs.readFileSync(tpl, 'utf8');
       const imageDir = `${path.basename(out, path.extname(out))}-images`;
       const { text, report } = templating.render(source, session, {
-        title: safeTitle, imageDir, brand, voice: voiceFor(session),
-        legend: legendFor(session),
+        title: safeTitle, language, imageDir, brand, voice: voiceFor(session),
+        legend: legendFor(session, language),
       });
 
       const copied = templating.copyImages(session, path.join(path.dirname(out), imageDir));
@@ -1871,7 +1878,7 @@ function voiceFor(s) {
   return s && s.purpose === 'evidence' ? 'past' : 'imperative';
 }
 
-async function exportPdf(title, outFile, brand) {
+async function exportPdf(title, outFile, brand, language = settings.values.language) {
   // The printer loads this from a temp directory, so images that cannot be
   // embedded go beside the temp page rather than beside the finished PDF.
   const stem = `bsr-export-${Date.now()}`;
@@ -1882,8 +1889,8 @@ async function exportPdf(title, outFile, brand) {
   });
 
   const html = buildHtml(session, {
-    title, brand, voice: voiceFor(session), imageSrc,
-    markerOpts: markerOptions(), legend: legendFor(session),
+    title, language, brand, voice: voiceFor(session), imageSrc,
+    markerOpts: markerOptions(), legend: legendFor(session, language),
   });
   const temp = path.join(tempDir, `${stem}.html`);
   fs.writeFileSync(temp, html, 'utf8');

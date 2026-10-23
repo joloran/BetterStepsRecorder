@@ -14,9 +14,11 @@ master record. This one is the map.
 
 The interface can be used in English or Brazilian Portuguese. Choose the
 language in Settings; buttons, menus and messages change immediately and the
-choice is remembered next time. A recording's descriptions, notes and exported
-instructions keep their original wording. More languages can be added through
-separate message catalogs; see [LOCALIZATION.md](LOCALIZATION.md).
+choice is remembered next time. Exported instructions and document labels use
+that language too, with Portuguese versions of the included templates. Notes,
+edited wording, application/control names and custom templates retain their
+original text. The stored recording stays intact. More languages can be added
+through separate message catalogs; see [LOCALIZATION.md](LOCALIZATION.md).
 
 You press record. You do a task on your computer — clicking, typing, dragging.
 Every action is captured with a screenshot, and named in words: *Clicked the

@@ -362,5 +362,25 @@ console.log('\nthe folder and the zip agree about what a picture is called:');
   fs.rmSync(bench, { recursive: true, force: true });
 }
 
+console.log('\nPortuguese LaTeX content:');
+{
+  const options = {
+    language: 'pt-BR', title: 'Meu procedimento',
+    legend: [{ id: 'yellow', name: 'Yellow', meaning: '' }],
+    imageRef: (step) => step.screenshot ? 'images/one.png' : null,
+  };
+  const fragment = buildLatex(session, options);
+  const complete = buildLatex(session, { ...options, standalone: true });
+  check('generated instructions use Portuguese', fragment.includes('Clique'));
+  check('authored notes remain untouched', fragment.includes('Wait for the 100'));
+  check('highlight heading is Portuguese', fragment.includes('Significado dos destaques'));
+  check('figure captions use the selected language', fragment.includes('Meu procedimento, etapa 1'));
+  check('standalone documents select Brazilian Portuguese in Babel',
+        complete.includes(B + 'usepackage[brazil]{babel}'));
+  check('fragments leave language packages to their host document', !fragment.includes('usepackage[brazil]'));
+  check('unknown languages produce the English document',
+        buildLatex(session, { title: 'Guide', language: 'xx' }) === buildLatex(session, { title: 'Guide' }));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

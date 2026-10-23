@@ -2,7 +2,8 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { buildHtml, buildMarkdown, copyImages, toImperative, exportable } = require('../ui/src/main/export');
+const { buildHtml, buildMarkdown, copyImages, toImperative, exportable,
+        windowTracker, legendLines } = require('../ui/src/main/export');
 
 const dir = path.join(os.tmpdir(), 'bsr-export-test-' + Date.now());
 fs.mkdirSync(path.join(dir, 'steps'), { recursive: true });
@@ -185,6 +186,63 @@ console.log('\nmarks in the exported page:');
         page.includes('.bsr-marks { position: absolute'));
   check('a step with no marks gets no overlay',
         !buildHtml(session, { title: 'Plain' }).includes('bsr-marks"'));
+}
+
+console.log('\nexports follow the selected language:');
+{
+  const legend = [
+    { name: 'Custom <colour>', fill: '#ffff00', meaning: '' },
+    { name: 'Blue', fill: '#0000ff', meaning: 'User-authored meaning' },
+  ];
+  const localized = buildHtml(session, { title: 'My <guide>', language: 'pt-BR', legend });
+  check('HTML declares the selected language', localized.includes('<html lang="pt-BR">'));
+  check('HTML localizes its step count and screenshot labels',
+        localized.includes('3 etapas') && localized.includes('alt="Etapa 1"'));
+  check('HTML localizes its legend and default footer',
+        localized.includes('Significado dos destaques')
+        && localized.includes('sem significado definido')
+        && localized.includes('Gravado com Steps Recorder.'));
+  check('HTML preserves user titles, legend names and meanings',
+        localized.includes('My &lt;guide&gt;') && localized.includes('Custom &lt;colour&gt;')
+        && localized.includes('User-authored meaning'));
+  check('localized automatic descriptions still escape captured text',
+        localized.includes('Clique no botão &quot;Save&quot; em &quot;Billing&quot;')
+        && localized.includes('Digite &quot;ACME&quot; no campo &quot;Name&quot;'));
+  check('HTML preserves user-edited descriptions in Portuguese exports',
+        localized.includes('Approve it &amp; &lt;check&gt; the &quot;total&quot;'));
+  check('HTML localizes a missing title',
+        buildHtml(session, { language: 'pt-BR' }).includes('<title>Etapas</title>'));
+  check('unknown export languages fall back to English',
+        buildHtml(session, { language: '../../invalid' }).includes('<html lang="en">'));
+  check('regional Portuguese aliases resolve for exports',
+        buildHtml(session, { language: 'PT_br' }).includes('<html lang="pt-BR">'));
+
+  const markdown = buildMarkdown(session, { imageDir: 'images', language: 'pt-BR', legend });
+  check('Markdown localizes its title, step count and image labels',
+        markdown.startsWith('# Etapas\n') && markdown.includes('3 etapas')
+        && markdown.includes('![Etapa 1](images/0001.png)'));
+  check('Markdown localizes the legend and preserves authored meanings',
+        markdown.includes('**Significado dos destaques**')
+        && markdown.includes('Custom <colour> — sem significado definido')
+        && markdown.includes('Blue — User-authored meaning'));
+  check('the shared legend formatter follows the selected language',
+        legendLines(legend, 'pt-BR')[0] === 'Custom <colour> — sem significado definido');
+  check('Portuguese single-step exports use the singular',
+        buildMarkdown({ dir, steps: [session.steps[0]] }, { language: 'pt-BR', imageDir: 'i' })
+          .includes('1 etapa\n'));
+  check('Portuguese evidence exports retain the past tense',
+        buildMarkdown(session, { language: 'pt-BR', imageDir: 'i', voice: 'past' })
+          .includes('## 1. Clicou no botão "Save" em "Billing"'));
+
+  const d = windowTracker('pt-BR');
+  const first = d(session.steps[0], 'imperative');
+  const next = d({ ...session.steps[0], id: 'repeat' }, 'imperative');
+  check('Portuguese names the first window then condenses its repeated clause',
+        first.endsWith(' em "Billing"') && next === first.slice(0, -' em "Billing"'.length));
+  const authored = { ...session.steps[0], textEdited: true,
+                     text: 'Keep this exact text in "Billing"' };
+  check('window condensation preserves user-authored text',
+        d(authored, 'imperative') === authored.text);
 }
 
 fs.rmSync(dir, { recursive: true, force: true });

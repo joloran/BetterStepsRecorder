@@ -4,6 +4,7 @@ const sections = require('../renderer/sections');
 const appName = require('../renderer/appname');
 const path = require('node:path');
 const os = require('node:os');
+const { translator } = require('./export-language');
 
 /**
  * Renders a recording into a Word template.
@@ -51,16 +52,17 @@ function docId(session, when) {
  * whoever writes the template is a documentation author, not a programmer.
  */
 function buildData(session, { title, brand, redactionSummary, voice = 'imperative',
-                              legend = [] }) {
+                              legend = [], language = 'en' } = {}) {
+  const t = translator(language);
   const all = session.steps || [];
   // Headings dropped last, so one left with nothing under it goes too.
   const included = sections.withoutEmpty(all.filter((s) => !s.excluded));
   const when = new Date();
 
-  const highlightLegend = legendLines(legend);
+  const highlightLegend = legendLines(legend, language);
 
   let number = 0;
-  const describe = windowTracker();
+  const describe = windowTracker(language);
   const under = sections.sectionOf(included);
   const steps = included.map((s, i) => {
     const isSection = sections.isSection(s);
@@ -75,7 +77,8 @@ function buildData(session, { title, brand, redactionSummary, voice = 'imperativ
       // Word had no notion of voice at all, so the format most likely to be
       // handed to a company was the one that read as a diary entry.
       description: describe(s, voice).replace(/\s*\n\s*/g, ' ').trim(),
-      action: (s.action || '').toUpperCase(),
+      action: t(`export.actions.${s.action}`) === `export.actions.${s.action}`
+        ? (s.action || '').toUpperCase() : t(`export.actions.${s.action}`),
       window: (s.window && s.window.title) || '',
       process: (s.window && s.window.process) || '',
       application: appName.friendly(s.window && s.window.process,
@@ -93,17 +96,17 @@ function buildData(session, { title, brand, redactionSummary, voice = 'imperativ
   });
 
   return {
-    title: title || session.name || 'Recorded procedure',
+    title: title || session.name || t('export.recordedProcedure'),
     doc_id: docId(session, when),
     timestamp: when.toISOString(),
-    date: when.toLocaleDateString(),
-    target_app: dominantApp(included) || 'Not recorded',
+    date: when.toLocaleDateString(t.locale === 'en' ? undefined : t.locale),
+    target_app: dominantApp(included) || t('export.notRecorded'),
     user_id: os.userInfo().username,
     os_environment: `${os.type()} ${os.release()}`,
     step_count: String(steps.filter((s) => !s.isNote && !s.isSection).length),
     organisation: (brand && brand.name) || '',
     footer: (brand && brand.footer) || '',
-    redaction_summary: redactionSummary,
+    redaction_summary: redactionSummary ?? require('./template').redactionSummary(all, language),
     // A template can print {{highlight_legend}} to explain its colours.
     // Empty unless a legend was asked for, so a template carrying the
     // placeholder does not show a heading for a guide with one colour.

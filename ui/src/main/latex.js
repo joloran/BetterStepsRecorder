@@ -33,6 +33,7 @@ const {
 } = require('./export');
 const sections = require('../renderer/sections');
 const appName = require('../renderer/appname');
+const { translator } = require('./export-language');
 
 /**
  * The ten characters TeX reserves, plus four that are legal but come out wrong.
@@ -106,10 +107,12 @@ function slugify(text, fallback = 'steps') {
  * whether it was re-encoded and marked on the way out, and that is the calling
  * side's business, not this one's.
  */
-function buildLatex(session, { title, voice = 'imperative', legend = [],
+function buildLatex(session, { title, voice = 'imperative', language = 'en', legend = [],
                                imageRef = () => null, inputName = null,
                                standalone = false,
                                imageDir = null, width = 0.85 } = {}) {
+  const t = translator(language);
+  title = title || t('export.recordedSteps');
   const steps = exportable(session);
   const slug = slugify(title);
   const out = [];
@@ -117,18 +120,19 @@ function buildLatex(session, { title, voice = 'imperative', legend = [],
   // A header in comments, because a fragment has nowhere else to say anything.
   // It survives being pasted, and it is the only place these two facts can be
   // put in front of the person who needs them.
-  out.push(`% ${escape(title)} - recorded with Steps Recorder.`);
+  out.push(`% ${escape(title)} - ${t('export.recordedWith')}`);
   out.push('%');
 
   if (standalone) {
     // A document, not a fragment: it owns its class, its margins and its
     // packages, and there is nothing to paste it into.
-    out.push('% A COMPLETE DOCUMENT: it compiles on its own, with nothing around it.');
-    if (imageDir) out.push(`% Upload it together with ./${imageDir}/ - the pictures live there.`);
-    out.push('% In Overleaf, set this as the main document if the project has more than one.');
+    out.push(`% ${t('export.latex.complete')}`);
+    if (imageDir) out.push(`% ${t('export.latex.uploadImages', { imageDir })}`);
+    out.push(`% ${t('export.latex.mainDocument')}`);
     out.push('');
     out.push('\\documentclass[11pt,a4paper]{article}');
     out.push('\\usepackage[T1]{fontenc}');
+    if (t.locale === 'pt-BR') out.push('\\usepackage[brazil]{babel}');
     out.push('\\usepackage[margin=2.5cm]{geometry}');
     out.push('\\usepackage{graphicx}');
     // Pinned rather than floating. In a procedure the picture belongs beside the
@@ -145,11 +149,11 @@ function buildLatex(session, { title, voice = 'imperative', legend = [],
     out.push('\\maketitle');
     out.push('');
   } else {
-    out.push('% A FRAGMENT: paste it into your document, inside \\begin{document}.');
-    out.push('% It declares no class and loads no packages - yours already has them.');
+    out.push(`% ${t('export.latex.fragment')}`);
+    out.push(`% ${t('export.latex.hostPackages')}`);
     out.push('%');
-    out.push('% Assumes \\usepackage{graphicx} in your preamble.');
-    if (imageDir) out.push(`% Screenshots are in ./${imageDir}/ - upload that folder too.`);
+    out.push(`% ${t('export.latex.graphicx')}`);
+    if (imageDir) out.push(`% ${t('export.latex.screenshotFolder', { imageDir })}`);
     if (inputName) {
       // The step everything else depends on, and the one nobody thinks to
       // mention. Watched for real: both files uploaded to Overleaf, graphicx
@@ -160,10 +164,10 @@ function buildLatex(session, { title, voice = 'imperative', legend = [],
       // Quoted when the name has a space in it: \input{my guide} is an error,
       // and the name comes from whatever the file was saved as.
       const called = /\s/.test(inputName) ? `"${inputName}"` : inputName;
-      out.push(`% To include it without pasting: \\input{${called}}`);
+      out.push(`% ${t('export.latex.include', { called })}`);
     }
-    out.push('% Figures are floats [htbp]. To pin each one exactly where it appears,');
-    out.push('% add \\usepackage{float} to your preamble and change [htbp] to [H].');
+    out.push(`% ${t('export.latex.floats')}`);
+    out.push(`% ${t('export.latex.pinFigures')}`);
     out.push('');
 
     // The procedure is a subsection of somebody else's document, and its label
@@ -176,9 +180,9 @@ function buildLatex(session, { title, voice = 'imperative', legend = [],
   }
 
   if (legend.length) {
-    out.push('\\noindent\\textbf{What the highlighting means}');
+    out.push(`\\noindent\\textbf{${escape(t('export.highlightLegend'))}}`);
     out.push('\\begin{itemize}');
-    for (const line of legendLines(legend)) out.push(`  \\item ${escape(line)}`);
+    for (const line of legendLines(legend, language)) out.push(`  \\item ${escape(line)}`);
     out.push('\\end{itemize}');
     out.push('');
   }
@@ -202,7 +206,7 @@ function buildLatex(session, { title, voice = 'imperative', legend = [],
     open = false;
   };
 
-  const describe = windowTracker();
+  const describe = windowTracker(language);
 
   for (const step of steps) {
     if (sections.isSection(step)) {
@@ -247,7 +251,7 @@ function buildLatex(session, { title, voice = 'imperative', legend = [],
       // like the document has a fault in it. The title and the number are what
       // a List of Figures entry and a "see Figure 12" need in order to be
       // worth anything.
-      out.push(`    \\caption{${escape(title)}, step ${n}}`);
+      out.push(`    \\caption{${escape(t('export.figureCaption', { title, number: n }))}}`);
       out.push(`    \\label{fig:${slug}-${n}}`);
       out.push('  \\end{figure}');
     }

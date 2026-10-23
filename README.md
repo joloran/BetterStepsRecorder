@@ -159,7 +159,9 @@ Settings.
 
 The interface is available in English and Brazilian Portuguese. Choose
 **Settings → Language → Português (Brasil)**; the choice applies immediately
-and is remembered. Recorded and authored content keeps its original wording.
+and is remembered. Exported instructions and document labels follow the selected
+language. Authored content and captured application/control names keep their
+original wording; stored recordings are never rewritten by a language change.
 See [docs/LOCALIZATION.md](docs/LOCALIZATION.md) for adding another language.
 
 ## Building from source

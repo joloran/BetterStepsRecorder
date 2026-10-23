@@ -6,16 +6,22 @@
  * the repository carries a working Word template that can be opened, edited and
  * re-saved in Word like any other document - the placeholders are ordinary text.
  *
- * Run: node scripts/make-docx-template.js
+ * Run: node scripts/make-docx-template.js [language]
  */
 const fs = require('node:fs');
 const path = require('node:path');
 const JSZip = require(path.join(__dirname, '..', 'ui', 'node_modules', 'jszip'));
+const { resolveLocale } = require('../ui/src/shared/i18n');
+const language = resolveLocale(process.argv[2]);
+const translations = language === 'en' ? {}
+  : require(`./locales/${language}/corporate-sop`);
+const translate = (text) => translations[text] ?? text;
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** A paragraph. `style` maps to one of the styles defined below. */
 function p(text, { style = null, bold = false, italic = false, spacing = 120 } = {}) {
+  text = translate(text);
   const pr = [
     style ? `<w:pStyle w:val="${style}"/>` : '',
     `<w:spacing w:after="${spacing}"/>`,
@@ -31,7 +37,7 @@ function table(rows) {
   const cell = (t, bold) =>
     `<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr>`
     + `<w:p><w:r>${bold ? '<w:rPr><w:b/></w:rPr>' : ''}`
-    + `<w:t xml:space="preserve">${esc(t)}</w:t></w:r></w:p></w:tc>`;
+    + `<w:t xml:space="preserve">${esc(translate(t))}</w:t></w:r></w:p></w:tc>`;
   const body = rows.map((r, i) =>
     `<w:tr>${r.map((c) => cell(c, i === 0)).join('')}</w:tr>`).join('');
   return `<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/>`
@@ -176,7 +182,9 @@ const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   word.file('styles.xml', stylesXml);
   word.folder('_rels').file('document.xml.rels', docRels);
 
-  const out = path.join(__dirname, '..', 'templates', 'corporate-sop.docx');
+  const out = path.join(__dirname, '..', 'templates',
+    ...(language === 'en' ? [] : [language]), 'corporate-sop.docx');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
   const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   fs.writeFileSync(out, buf);
   console.log(`wrote ${out} (${buf.length} bytes)`);

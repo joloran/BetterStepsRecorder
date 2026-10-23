@@ -4,6 +4,7 @@ const sections = require('../renderer/sections');
 const appName = require('../renderer/appname');
 const annotate = require('../renderer/annotate');
 const path = require('node:path');
+const { localizeStep, translator } = require('./export-language');
 
 /**
  * Turns a recording into something someone else can read.
@@ -32,7 +33,9 @@ const IMPERATIVE = [
  * ("Clicked the Save button"), and rewriting that into an instruction would
  * misrepresent what the document is.
  */
-function toImperative(step, voice = 'imperative') {
+function toImperative(step, voice = 'imperative', language = 'en') {
+  const localized = localizeStep(step, voice, language);
+  if (localized !== null) return localized;
   const text = step.text || step.action || '';
   // Wording the user rewrote is theirs; do not second-guess it.
   if (step.textEdited || voice === 'past') return text;
@@ -58,12 +61,13 @@ function toImperative(step, voice = 'imperative') {
  * step was already in that window. It is said once, and again whenever it
  * changes.
  */
-function windowTracker() {
+function windowTracker(language = 'en') {
+  const t = translator(language);
   let currentTitle = null;
   let currentApp = null;
 
   function describe(step, voice) {
-    const text = toImperative(step, voice);
+    const text = toImperative(step, voice, language);
     const title = (step.window && step.window.title) || '';
 
     // A written note belongs to wherever the reader already is; it neither
@@ -84,11 +88,14 @@ function windowTracker() {
     // the first time, and dropped from repeats.
     const repeated = title === currentTitle;
     currentTitle = title;
-    if (!repeated) return text;
+    if (!repeated || step.textEdited || step.action === 'section' || step.action === 'photo') return text;
 
     // Only the trailing clause, and only when it is exactly this window: a
     // title quoted mid-sentence is part of what was clicked, not context.
-    const suffix = ` in "${title}"`;
+    // Unrecognized descriptions remain English, even in a localized export.
+    // Only remove the translated suffix when this description was translated.
+    const suffix = localizeStep(step, voice, language) === null
+      ? ` in "${title}"` : t('export.windowSuffix', { title });
     return text.endsWith(suffix) ? text.slice(0, -suffix.length) : text;
   }
 
@@ -156,19 +163,22 @@ function logoTag(brand) {
  * A colour used without a meaning still appears, saying so: a mark on the page
  * that the key does not explain is exactly what a key exists to prevent.
  */
-function legendLines(legend) {
+function legendLines(legend, language = 'en') {
+  const t = translator(language);
   return (legend || []).map((h) =>
-    `${h.name} — ${h.meaning || 'no meaning set'}`);
+    `${h.name} — ${h.meaning || t('export.noMeaning')}`);
 }
 
 function buildHtml(session, { title, embedImages = true, brand = null,
                              voice = 'imperative', imageSrc = null,
-                             markerOpts = {}, legend = [] }) {
+                             markerOpts = {}, legend = [], language = 'en' }) {
+  const t = translator(language);
+  title = title || t('export.defaultTitle');
   const steps = exportable(session);
-  const generated = new Date().toLocaleString();
+  const generated = new Date().toLocaleString(t.locale);
 
   let n = 0;
-  const describe = windowTracker();
+  const describe = windowTracker(language);
   const body = steps.map((step) => {
     if (sections.isSection(step)) {
       // Inside the <ol> rather than breaking the list in two, so the step
@@ -228,7 +238,7 @@ function buildHtml(session, { title, embedImages = true, brand = null,
       </div>
       ${context && describe.changed ? `<p class="context">${context}</p>` : ''}
       ${src ? `<figure class="shot">
-        <img src="${src}" alt="Step ${i + 1}" loading="lazy" />
+        <img src="${src}" alt="${escapeHtml(t('export.stepImage', { number: i + 1 }))}" loading="lazy" />
         ${marksHtml}
         ${markerHtml}
       </figure>` : ''}
@@ -236,7 +246,7 @@ function buildHtml(session, { title, embedImages = true, brand = null,
   }).join('');
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(t.locale)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -329,32 +339,34 @@ function buildHtml(session, { title, embedImages = true, brand = null,
         ${brand && brand.name ? `<p class="brand">${escapeHtml(brand.name)}</p>` : ''}
       </div>
     </header>
-    <p class="meta">${countSteps(steps)} step${countSteps(steps) === 1 ? '' : 's'} · ${escapeHtml(generated)}</p>
+    <p class="meta">${escapeHtml(t('export.stepCount', { count: countSteps(steps) }))} · ${escapeHtml(generated)}</p>
     ${legend.length ? `<dl class="legend">
-      <dt class="legend-title">What the highlighting means</dt>
+      <dt class="legend-title">${escapeHtml(t('export.highlightLegend'))}</dt>
       ${legend.map((h) => `<dd><span class="swatch" style="background:${h.fill}"></span>${
-        escapeHtml(h.name)} — ${escapeHtml(h.meaning || 'no meaning set')}</dd>`).join('')}
+        escapeHtml(h.name)} — ${escapeHtml(h.meaning || t('export.noMeaning'))}</dd>`).join('')}
     </dl>` : ''}
     <ol>${body}</ol>
     <footer>${brand && brand.footer
       ? escapeHtml(brand.footer) + ' &middot; '
-      : ''}Recorded with Steps Recorder.</footer>
+      : ''}${escapeHtml(t('export.recordedWith'))}</footer>
   </div>
 </body>
 </html>`;
 }
 
 function buildMarkdown(session, { title, imageDir, brand = null,
-                                 voice = 'imperative', legend = [] }) {
+                                 voice = 'imperative', legend = [], language = 'en' }) {
+  const t = translator(language);
+  title = title || t('export.defaultTitle');
   const steps = exportable(session);
   const lines = [`# ${title}`, ''];
   if (brand && brand.name) lines.push(`*${brand.name}*`, '');
   lines.push(...['',
-                 `${countSteps(steps)} step${countSteps(steps) === 1 ? '' : 's'}`, '']);
+                 t('export.stepCount', { count: countSteps(steps) }), '']);
 
   if (legend.length) {
-    lines.push('**What the highlighting means**', '');
-    for (const line of legendLines(legend)) lines.push(`* ${line}`);
+    lines.push(`**${t('export.highlightLegend')}**`, '');
+    for (const line of legendLines(legend, language)) lines.push(`* ${line}`);
     lines.push('');
   }
 
@@ -364,7 +376,7 @@ function buildMarkdown(session, { title, imageDir, brand = null,
   const stepRule = sections.hasSections(steps) ? '###' : '##';
 
   let n = 0;
-  const describe = windowTracker();
+  const describe = windowTracker(language);
   steps.forEach((step) => {
     if (sections.isSection(step)) {
       lines.push(`## ${step.text || ''}`, '');
@@ -387,7 +399,7 @@ function buildMarkdown(session, { title, imageDir, brand = null,
 
     if (step.screenshot && fs.existsSync(path.join(session.dir, step.screenshot))) {
       // Relative path so the document works in a git wiki or a docs folder.
-      lines.push(`![Step ${i + 1}](${imageDir}/${path.basename(step.screenshot)})`, '');
+      lines.push(`![${t('export.stepImage', { number: i + 1 })}](${imageDir}/${path.basename(step.screenshot)})`, '');
     }
   });
 

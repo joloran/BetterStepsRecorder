@@ -4,6 +4,7 @@ const sections = require('../renderer/sections');
 const appName = require('../renderer/appname');
 const path = require('node:path');
 const os = require('node:os');
+const { translator: createTranslator } = require('./export-language');
 
 /**
  * Renders a recording into someone else's document format.
@@ -39,17 +40,24 @@ const LOOPS = [
 /** Used when a loop block carries no {{placeholders}} of its own. */
 const DEFAULT_ROW = {
   steps: '{{number}}. {{description}}\n\n{{image_block}}\n',
-  gallery: '**Step {{number}}** - {{description}}\n\n{{image_block}}\n',
 };
 
 const oneLine = (v) => String(v ?? '').replace(/\s*\n\s*/g, ' ').trim();
+
+// Unknown recorder actions remain useful to a custom template or a future engine.
+function actionLabel(action, t) {
+  const key = `export.actions.${action}`;
+  const translated = t(key);
+  return translated === key ? (action || '').toUpperCase() : translated;
+}
 
 /**
  * What actually happened to this recording, rather than a blanket assurance.
  * A compliance section that claims more than the tool did is worse than one
  * that claims nothing.
  */
-function redactionSummary(allSteps) {
+function redactionSummary(allSteps, language = 'en') {
+  const t = createTranslator(language);
   // Deliberately the FULL list: the reader needs to know that steps were held
   // back from this document, which is invisible if you count what remains.
   const steps = allSteps.filter((s) => !s.excluded);
@@ -61,17 +69,17 @@ function redactionSummary(allSteps) {
 
   const parts = [];
   parts.push(passwords
-    ? `${passwords} password entr${passwords === 1 ? 'y' : 'ies'} recorded without their contents`
-    : 'no password fields were typed into during this recording');
-  if (masked) parts.push(`${masked} typed value(s) masked as card or national-insurance shaped`);
+    ? t('export.redaction.passwords', { count: passwords })
+    : t('export.redaction.noPasswords'));
+  if (masked) parts.push(t('export.redaction.masked', { count: masked }));
   parts.push(blurred
-    ? `${blurred} screenshot(s) had regions blurred by the author`
-    : 'no screenshot regions were blurred by the author');
+    ? t('export.redaction.blurred', { count: blurred })
+    : t('export.redaction.noBlurred'));
   // A cropped screenshot is not the frame that was captured. Saying so is the
   // same honesty as not overclaiming a redaction: a reader comparing the
   // document to the system should know the pictures were trimmed.
-  if (cropped) parts.push(`${cropped} screenshot(s) were cropped by the author`);
-  if (excluded) parts.push(`${excluded} step(s) were excluded from this document`);
+  if (cropped) parts.push(t('export.redaction.cropped', { count: cropped }));
+  if (excluded) parts.push(t('export.redaction.excluded', { count: excluded }));
 
   return parts.join('; ') + '.';
 }
@@ -95,20 +103,22 @@ function docId(session, when) {
 
 function buildValues(session, steps, allSteps, opts) {
   const when = new Date();
+  const t = createTranslator(opts.language);
   return {
-    INJECT_TITLE: opts.title || session.name || 'Recorded procedure',
+    INJECT_TITLE: opts.title || session.name || t('export.recordedProcedure'),
     INJECT_DOC_ID: opts.docId || docId(session, when),
     INJECT_TIMESTAMP: when.toISOString(),
-    INJECT_DATE: when.toISOString().slice(0, 10),
-    INJECT_TARGET_APP: dominantApp(steps) || 'Not recorded',
+    INJECT_DATE: t.locale === 'en' ? when.toISOString().slice(0, 10)
+      : when.toLocaleDateString(t.locale),
+    INJECT_TARGET_APP: dominantApp(steps) || t('export.notRecorded'),
     INJECT_USER_ID: opts.userId || os.userInfo().username,
     INJECT_OS_ENVIRONMENT: `${os.type()} ${os.release()}`,
     INJECT_STEP_COUNT: String(sections.countSteps(steps)),
     INJECT_ORGANISATION: opts.brand && opts.brand.name ? opts.brand.name : '',
-    INJECT_REDACTION_SUMMARY: redactionSummary(allSteps),
+    INJECT_REDACTION_SUMMARY: redactionSummary(allSteps, t.locale),
     // Empty when no legend was asked for, so a template carrying the hook does
     // not print an empty heading for guides that use one colour.
-    INJECT_HIGHLIGHT_LEGEND: legendLines(opts.legend).join('; '),
+    INJECT_HIGHLIGHT_LEGEND: legendLines(opts.legend, t.locale).join('; '),
   };
 }
 
@@ -120,7 +130,8 @@ function fillRow(row, vars) {
 }
 
 function stepVars(step, number, imageDir, voice = 'imperative', describe = null,
-                  section = '') {
+                  section = '', language = 'en') {
+  const t = createTranslator(language);
   const file = step.screenshot ? path.basename(step.screenshot) : '';
   const rel = file ? `${imageDir}/${file}` : '';
   const isSection = sections.isSection(step);
@@ -130,7 +141,7 @@ function stepVars(step, number, imageDir, voice = 'imperative', describe = null,
 
   // Once, not per field: `describe` is a window tracker that advances on every
   // call, so asking it twice for one step yields two different strings.
-  const text = oneLine(describe ? describe(step, voice) : toImperative(step, voice));
+  const text = oneLine(describe ? describe(step, voice) : toImperative(step, voice, language));
 
   return {
     number: isNote ? '' : String(number),
@@ -143,7 +154,7 @@ function stepVars(step, number, imageDir, voice = 'imperative', describe = null,
     // recording was for. A procedure handed to somebody then read as a report
     // of what one person once did rather than as instructions.
     description: text,
-    action: (step.action || '').toUpperCase(),
+    action: actionLabel(step.action, t),
     window: oneLine(step.window && step.window.title),
     process: oneLine(step.window && step.window.process),
     // The same application, named the way Windows names it. `process` stays
@@ -155,7 +166,7 @@ function stepVars(step, number, imageDir, voice = 'imperative', describe = null,
     image: rel,
     // Ready-made Markdown, so a template author does not have to know whether a
     // given step has a screenshot at all.
-    image_block: rel ? `![Step ${number}](${rel})` : '',
+    image_block: rel ? `![${t('export.step', { number })}](${rel})` : '',
     // Ready-made Markdown for the row's text, in the same spirit as
     // image_block: a template's loop body is one string for every row and the
     // engine has no conditionals, so without this a heading comes out as
@@ -187,12 +198,13 @@ function stepVars(step, number, imageDir, voice = 'imperative', describe = null,
  */
 function render(templateText, session, { title, imageDir = 'images', brand = null,
                                          docId: forcedId = null, userId = null,
-                                         voice = 'imperative', legend = [] } = {}) {
+                                         voice = 'imperative', legend = [], language = 'en' } = {}) {
+  const t = createTranslator(language);
   const allSteps = session.steps || [];
   // Headings dropped last, so one whose every step was excluded goes too.
   const steps = sections.withoutEmpty(allSteps.filter((s) => !s.excluded));
   const values = buildValues(session, steps, allSteps,
-                             { title, brand, docId: forcedId, userId, legend });
+                             { title, brand, docId: forcedId, userId, legend, language });
 
   let out = templateText;
   const filledLoops = [];
@@ -206,7 +218,9 @@ function render(templateText, session, { title, imageDir = 'images', brand = nul
 
     out = out.replace(pattern, (whole, body) => {
       const hasPlaceholders = /\{\{\s*[a-z0-9_]+\s*\}\}/i.test(body);
-      const row = hasPlaceholders ? body : DEFAULT_ROW[loop.kind];
+      const row = hasPlaceholders ? body : loop.kind === 'gallery'
+        ? `**${t('export.step', { number: '{{number}}' })}** - {{description}}\n\n{{image_block}}\n`
+        : DEFAULT_ROW[loop.kind];
 
       const source = loop.kind === 'gallery'
         ? steps.filter((s) => s.screenshot)
@@ -214,12 +228,12 @@ function render(templateText, session, { title, imageDir = 'images', brand = nul
 
       let number = 0;
       // One tracker per loop: a gallery and a step list each start afresh.
-      const describe = windowTracker();
+      const describe = windowTracker(language);
       const under = sections.sectionOf(source);
       const rendered = source.map((step, i) => {
         if (sections.isStep(step)) number += 1;
         return fillRow(row, stepVars(step, number, imageDir, voice, describe,
-                                     under[i]));
+                                     under[i], language));
       }).join('');
 
       filledLoops.push({ hook: loop.start, rows: source.length,

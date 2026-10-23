@@ -9,7 +9,7 @@
     module.exports = api;
     // Keep this list and the scripts in index.html together when adding a locale.
     for (const locale of api.locales) {
-      for (const area of ['ui', 'renderer', 'main']) {
+      for (const area of ['ui', 'renderer', 'main', 'export']) {
         api.register(locale.code, require(`./locales/${locale.code}/${area}`));
       }
     }
