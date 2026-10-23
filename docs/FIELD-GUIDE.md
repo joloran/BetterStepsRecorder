@@ -12,6 +12,12 @@ master record. This one is the map.
 
 ## 1. What the product is
 
+The interface can be used in English or Brazilian Portuguese. Choose the
+language in Settings; buttons, menus and messages change immediately and the
+choice is remembered next time. A recording's descriptions, notes and exported
+instructions keep their original wording. More languages can be added through
+separate message catalogs; see [LOCALIZATION.md](LOCALIZATION.md).
+
 You press record. You do a task on your computer — clicking, typing, dragging.
 Every action is captured with a screenshot, and named in words: *Clicked the
 "Save" button in "Billing"*. You press stop, tidy the result, and export it as a
@@ -1275,9 +1281,9 @@ the lines in the same places as the screen.
 
 ```mermaid
 flowchart LR
-    tool["Text tool"] --> click{"Click or drag?"}
-    click -- click --> label["One-line label"]
-    click -- drag --> box["Text box<br/>words wrap inside"]
+    tool["Text tool"] --> gesture{"Click or drag?"}
+    gesture -- click --> label["One-line label"]
+    gesture -- drag --> box["Text box<br/>words wrap inside"]
     box --> card["Card behind it<br/>any colour, solid to see-through"]
 ```
 

@@ -10,6 +10,14 @@
  *
  * Pure of Electron, so each wording can be checked without a window.
  */
+const i18n = require('../shared/i18n');
+
+const ACTION_KEYS = {
+  'save the file': 'main.file.action.save',
+  'export the guide': 'main.file.action.export',
+  'save the photo': 'main.file.action.savePhoto',
+  'move the empty recording to the Recycle Bin': 'main.file.action.discard',
+};
 
 /**
  * A file or folder problem, described for the person who hit it.
@@ -17,25 +25,28 @@
  * `action` is the thing they were doing, phrased to follow "Could not" -
  * "export the guide", "save the photo".
  */
-function fileProblem(err, { action = 'save the file' } = {}) {
+function fileProblem(err, { action = 'save the file', language = 'en' } = {}) {
+  const t = i18n.createTranslator(language);
+  // Existing callers may supply their own action. Known application actions
+  // have catalog entries; custom actions keep their backwards-compatible text.
+  const params = { action: Object.hasOwn(ACTION_KEYS, action) ? t(ACTION_KEYS[action]) : action };
   const code = err && err.code;
   switch (code) {
     // Windows reports a file held open by another program as either of these,
     // and Word holding the .docx being exported over is the usual one.
     case 'EBUSY':
-      return `Could not ${action}: the file is open in another program. Close it there and try again.`;
+      return t('main.file.busy', params);
     case 'EPERM':
-      return `Could not ${action}: the file may be open in another program, or the folder may be `
-           + 'protected. Close the file, or choose a different folder.';
+      return t('main.file.protected', params);
     case 'EACCES':
-      return `Could not ${action}: Windows will not let this app write there. Choose a different folder.`;
+      return t('main.file.denied', params);
     case 'ENOSPC':
-      return `Could not ${action}: the disk is full. Free some space and try again.`;
+      return t('main.file.full', params);
     case 'ENOENT':
-      return `Could not ${action}: that folder is no longer there. Choose another.`;
+      return t('main.file.missingFolder', params);
     default:
       // Unknown causes are not guessed at. The log has the real one.
-      return `Could not ${action}. The details are in the log.`;
+      return t('main.file.unknown', params);
   }
 }
 

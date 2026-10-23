@@ -157,6 +157,11 @@ your recent recordings so you can pick one up again.
 Exports can carry your organisation's name, logo and a footer — set them in
 Settings.
 
+The interface is available in English and Brazilian Portuguese. Choose
+**Settings → Language → Português (Brasil)**; the choice applies immediately
+and is remembered. Recorded and authored content keeps its original wording.
+See [docs/LOCALIZATION.md](docs/LOCALIZATION.md) for adding another language.
+
 ## Building from source
 
 Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Node 20+.

@@ -85,6 +85,22 @@ console.log('\nwhat the window saves is clamped on the way in too:');
         new Settings(path.dirname(s.file), { documentsDir: docs }).values.stepsWidth === 480);
 }
 
+console.log('\nthe interface language:');
+{
+  check('existing installations stay in English', withFile({}).values.language === 'en');
+  check('Portuguese can be selected', withFile({ language: 'pt-BR' }).values.language === 'pt-BR');
+  check('language tags are normalized', withFile({ language: 'PT_br' }).values.language === 'pt-BR');
+  check('unsupported languages fall back to English', withFile({ language: 'invalid' }).values.language === 'en');
+  check('invalid types fall back safely', withFile({ language: {} }).values.language === 'en');
+  const s = withFile({});
+  s.update({ language: 'pt-BR' });
+  check('the choice survives reopening',
+        new Settings(path.dirname(s.file), { documentsDir: docs }).values.language === 'pt-BR');
+  s.update({ language: '../../outside' });
+  check('invalid updates are saved as English',
+        JSON.parse(fs.readFileSync(s.file, 'utf8')).language === 'en');
+}
+
 console.log('\nwhich key deletes a step:');
 {
   check('either key, by default', withFile(undefined).values.deleteKey === 'either');

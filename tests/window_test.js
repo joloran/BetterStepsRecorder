@@ -3409,6 +3409,123 @@ app.whenReady().then(async () => {
   check('none of them is a white box in a dark window', platform.length === 0,
         platform.map((f) => `${f.id}=${f.bg}`).join(' '));
 
+  console.log('\nlanguage changes preserve the current edit:');
+  const languages = await win.webContents.executeJavaScript(`(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const byId = (id) => document.getElementById(id);
+    // Reopen the fixture, then leave unsaved edits in both editor and settings.
+    await showOpened(await window.bsr.openLibrary('C:/fake/session-1'));
+    await select('s1');
+    scopeChoice = { pids: [], label: 'Everything' };
+    byId('detail-text').value = 'Unfinished <user> edit — ação';
+    byId('session-name').value = 'My original recording';
+    byId('btn-settings').click();
+    await sleep(100);
+    byId('set-brand').value = 'Organização ainda não salva';
+    const choose = async (language) => {
+      const select = byId('set-language');
+      select.value = language;
+      select.dispatchEvent(new Event('change'));
+      for (let n = 0; n < 100 && document.documentElement.lang !== language; n++) await sleep(20);
+      await sleep(100);
+    };
+    const originalText = steps[0].text;
+    await choose('pt-BR');
+    const portuguese = {
+      language: document.documentElement.lang,
+      settings: byId('btn-settings').textContent,
+      placeholder: byId('session-name').placeholder,
+      accessible: byId('session-name').getAttribute('aria-label'),
+      scope: byId('btn-scope').textContent,
+      persisted: (await window.bsr.getSettings()).language,
+      edit: byId('detail-text').value,
+      brand: byId('set-brand').value,
+      selected: selectedId,
+      dialogOpen: byId('settings').open,
+      sessionName: byId('session-name').value,
+      recordedText: steps[0].text,
+    };
+    // New dynamic state must also use the language, beyond static HTML labels.
+    setState('paused');
+    portuguese.paused = byId('c-state').textContent;
+    portuguese.resume = byId('c-pause').textContent;
+    setState('idle');
+    const payload = '<img src=x onerror=alert(1)>';
+    showNotice(() => tr('scope.unavailable', { name: payload }));
+    portuguese.noticeIsText = byId('notice-text').textContent.includes(payload)
+      && !byId('notice-text').querySelector('img');
+    await choose('en');
+    const english = {
+      language: document.documentElement.lang,
+      settings: byId('btn-settings').textContent,
+      scope: byId('btn-scope').textContent,
+      edit: byId('detail-text').value,
+      persisted: (await window.bsr.getSettings()).language,
+    };
+    byId('settings').close();
+    await closeRecording();
+    await choose('pt-BR');
+    const afterClose = { dir: openDir, count: steps.length,
+      continueHidden: byId('btn-continue').hidden,
+      currentRows: document.querySelectorAll('.lib-row.current').length,
+      status: byId('status-text').textContent };
+    await choose('en');
+    return { portuguese, english, originalText, afterClose };
+  })()`);
+  const pt = languages.portuguese;
+  check('the real settings selector switches to Portuguese and persists it',
+        pt.language === 'pt-BR' && pt.persisted === 'pt-BR' && pt.settings === 'Configurações', JSON.stringify(pt));
+  check('placeholders and accessible names change too',
+        pt.placeholder === 'Gravação sem título' && pt.accessible === 'Nome da gravação');
+  check('new recording state uses Portuguese', pt.paused === 'Pausado' && pt.resume === 'Retomar');
+  check('changing language preserves unsaved editor and settings fields',
+        pt.edit === 'Unfinished <user> edit — ação' && pt.brand === 'Organização ainda não salva', JSON.stringify(pt));
+  check('the selected step, recording name and open dialog survive',
+        pt.selected === 's1' && pt.dialogOpen && pt.sessionName === 'My original recording');
+  check('recorded content is never rewritten', pt.recordedText === languages.originalText);
+  check('translated interpolated messages remain plain text', pt.noticeIsText);
+  check('switching back restores English, including canonical scope labels',
+        languages.english.language === 'en' && languages.english.persisted === 'en'
+        && languages.english.settings === 'Settings' && languages.english.scope === 'Capture: Everything'
+        && languages.english.edit === pt.edit, JSON.stringify(languages.english));
+  check('changing language after closing never reopens the previous recording',
+        languages.afterClose.dir === null && languages.afterClose.count === 0
+        && languages.afterClose.continueHidden && languages.afterClose.currentRows === 0
+        && languages.afterClose.status === 'Pronto', JSON.stringify(languages.afterClose));
+
+  const localizedPreload = path.join(preloadDir, 'preload-pt-BR.js');
+  fs.writeFileSync(localizedPreload, fs.readFileSync(preloadPath, 'utf8')
+    .replace('const SETTINGS = {', "const SETTINGS = { language: 'pt-BR',"));
+  const restarted = new BrowserWindow({ width: 940, height: 700, show: false,
+    webPreferences: { preload: localizedPreload, contextIsolation: true,
+      nodeIntegration: false, sandbox: false } });
+  await restarted.loadFile(path.join(RENDERER, 'index.html'));
+  const startup = await restarted.webContents.executeJavaScript(`(async () => {
+    for (let n = 0; n < 100 && document.documentElement.lang !== 'pt-BR'; n++) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return { language: document.documentElement.lang,
+      selected: document.getElementById('set-language').value,
+      status: document.getElementById('status-text').textContent,
+      scope: document.getElementById('btn-scope').textContent,
+      settings: document.getElementById('btn-settings').textContent };
+  })()`);
+  check('a fresh window loads the saved Portuguese preference',
+        startup.language === 'pt-BR' && startup.selected === 'pt-BR'
+        && startup.settings === 'Configurações' && startup.status === 'Pronto'
+        && startup.scope === 'Capturar: Tudo', JSON.stringify(startup));
+  const narrowLayout = await restarted.webContents.executeJavaScript(`(async () => {
+    await showOpened(await window.bsr.openLibrary('C:/fake/session-1'));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return { width: innerWidth, scroll: document.documentElement.scrollWidth,
+      buttonsFit: [...document.querySelectorAll('.toolbar button')]
+        .filter((button) => !button.hidden)
+        .every((button) => button.getBoundingClientRect().right <= innerWidth) };
+  })()`);
+  check('Portuguese controls fit at the minimum window width with a recording open',
+        narrowLayout.scroll <= narrowLayout.width && narrowLayout.buttonsFit, JSON.stringify(narrowLayout));
+  restarted.destroy();
+
   console.log('\nthe page ran clean:');
   const alerts = await win.webContents.executeJavaScript('window.__alerts');
   check('nothing gave up and raised a dialog', alerts.length === 0);

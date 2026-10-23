@@ -4,59 +4,59 @@
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; img-src bsr: data:; style-src 'self'; script-src 'self';" />
-  <title>Steps Recorder</title>
+  <title data-i18n="ui.app.title">Steps Recorder</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body data-drop-photos-label="Drop the photos to add them" data-i18n-data-drop-photos-label="ui.steps.dropPhotos">
   <div id="compactbar" class="compactbar" hidden>
     <span id="c-dot" class="dot rec"></span>
-    <span id="c-state" class="c-state">Recording</span>
-    <span id="c-count" class="c-count">0 steps</span>
+    <span id="c-state" class="c-state" data-i18n="ui.common.recording">Recording</span>
+    <span id="c-count" class="c-count" data-i18n="ui.compact.stepCount">0 steps</span>
     <span id="c-elapsed" class="c-elapsed"></span>
     <!-- When the program in front cannot be seen: running as administrator. -->
     <span id="c-blocked" class="c-blocked" hidden></span>
     <div class="c-actions">
-      <button id="c-pause">Pause</button>
-      <button id="c-stop" class="danger">Stop</button>
+      <button id="c-pause" data-i18n="ui.common.pause">Pause</button>
+      <button id="c-stop" class="danger" data-i18n="ui.common.stop">Stop</button>
     </div>
   </div>
 
   <header class="toolbar">
     <input id="session-name" class="session-name" type="text"
-           placeholder="Untitled recording" aria-label="Recording name" />
+           placeholder="Untitled recording" data-i18n-placeholder="ui.session.untitled" aria-label="Recording name" data-i18n-aria-label="ui.session.name" />
     <!-- Closes the recording that is open and goes back to the list. Stopping
          leaves a recording open for editing, and without this nothing ever put
          it away: the window felt permanently inside the last thing recorded. -->
     <button id="btn-close" class="close-rec" hidden
-            title="Close this recording" aria-label="Close this recording">&times;</button>
+            title="Close this recording" data-i18n-title="ui.session.close" aria-label="Close this recording" data-i18n-aria-label="ui.session.close">&times;</button>
     <div class="controls">
-      <div class="group" role="group" aria-label="Recording">
-        <button id="btn-scope">Capture: Everything</button>
-        <button id="btn-record" class="primary">New recording</button>
+      <div class="group" role="group" aria-label="Recording" data-i18n-aria-label="ui.toolbar.recordingGroup">
+        <button id="btn-scope" data-i18n="ui.toolbar.captureEverything">Capture: Everything</button>
+        <button id="btn-record" class="primary" data-i18n="ui.common.newRecording">New recording</button>
         <!-- Only for a recording that is open and idle: it adds to that one
              rather than making another. Hidden the rest of the time, because
              "continue" with nothing open has nothing to continue. -->
-        <button id="btn-continue" hidden>Continue this recording</button>
+        <button id="btn-continue" hidden data-i18n="ui.toolbar.continue">Continue this recording</button>
         <!-- No Pause or Stop here. Recording shrinks the window to the strip
              above, which carries both: a copy in this toolbar could only ever
              be seen disabled, because every state that enables it hides it. -->
       </div>
       <span class="divider" aria-hidden="true"></span>
-      <div class="group" role="group" aria-label="Document">
+      <div class="group" role="group" aria-label="Document" data-i18n-aria-label="ui.toolbar.documentGroup">
         <!-- Everything about recordings, under one button: the way back to the
              library, opening one from anywhere on the disk, and checking that
              an old one still matches the application it describes. They were
              three buttons for one subject, and the third was a permanent
              fixture for something done once in a blue moon. -->
-        <button id="btn-recordings" title="Your recordings, opening one, and checking it"
-                aria-haspopup="menu">Recordings ▾</button>
-        <button id="btn-export">Export…</button>
-        <button id="btn-settings">Settings</button>
+        <button id="btn-recordings" title="Your recordings, opening one, and checking it" data-i18n-title="ui.toolbar.recordingsHint"
+                aria-haspopup="menu" data-i18n="ui.toolbar.recordings">Recordings ▾</button>
+        <button id="btn-export" data-i18n="ui.common.exportEllipsis">Export…</button>
+        <button id="btn-settings" data-i18n="ui.common.settings">Settings</button>
       </div>
     </div>
     <div class="status">
       <span id="dot" class="dot idle"></span>
-      <span id="status-text">Idle</span>
+      <span id="status-text" data-i18n="ui.status.idle">Idle</span>
     </div>
   </header>
 
@@ -66,8 +66,8 @@
     <!-- The next move, where there is one: Undo after a delete, Open or Show in
          folder after an export. Filled by showNotice. -->
     <span id="notice-actions" class="notice-actions"></span>
-    <button id="notice-settings" class="linky">Open Settings</button>
-    <button id="notice-close" class="notice-x" title="Dismiss">&times;</button>
+    <button id="notice-settings" class="linky" data-i18n="ui.notice.settings">Open Settings</button>
+    <button id="notice-close" class="notice-x" title="Dismiss" data-i18n-title="ui.notice.dismiss">&times;</button>
   </div>
 
   <!-- What stopping says. Everything was already on disk, but the only evidence
@@ -76,9 +76,9 @@
   <div id="finished" class="notice finished" hidden>
     <span class="finished-tick" aria-hidden="true">&#10003;</span>
     <span id="finished-text"></span>
-    <button id="finished-export" class="primary">Export&hellip;</button>
-    <button id="finished-edit">Keep editing</button>
-    <button id="finished-new">New recording</button>
+    <button id="finished-export" class="primary" data-i18n="ui.common.exportEllipsis">Export&hellip;</button>
+    <button id="finished-edit" data-i18n="ui.finished.keepEditing">Keep editing</button>
+    <button id="finished-new" data-i18n="ui.common.newRecording">New recording</button>
   </div>
 
   <div id="huemenu" class="huemenu" hidden></div>
@@ -95,7 +95,7 @@
       <!-- The column folded away. Not zero width: a rail keeps the way back on
            screen, and says how many steps are behind it. -->
       <button id="btn-steps-expand" class="steps-rail"
-              title="Show the steps (Ctrl+B)" aria-label="Show the steps">
+              title="Show the steps (Ctrl+B)" data-i18n-title="ui.steps.showShortcut" aria-label="Show the steps" data-i18n-aria-label="ui.steps.show">
         <span class="chev">›</span>
         <span id="rail-count" class="rail-count">0</span>
       </button>
@@ -104,62 +104,60 @@
            centred label, with + Add and the count pushed right, so nothing in
            the header lined up with anything under it. -->
       <div class="steps-head">
-        <span class="steps-title">Steps <span id="count" class="count">0</span></span>
+        <span class="steps-title"><span data-i18n="ui.steps.title">Steps</span> <span id="count" class="count">0</span></span>
         <span class="insert">
           <!-- One button, three things it can add. All three are also on the
                right-click menu of a step, which is where two of them already
                were while these buttons duplicated them. -->
           <button id="btn-add" class="tiny"
-                  title="Add a note, a section heading, or photographs">+ Add</button>
+                  title="Add a note, a section heading, or photographs" data-i18n-title="ui.steps.addHint" data-i18n="ui.steps.add">+ Add</button>
         </span>
         <button id="btn-steps-collapse" class="tiny ghost"
-                title="Hide the steps (Ctrl+B)" aria-label="Hide the steps">‹</button>
+                title="Hide the steps (Ctrl+B)" data-i18n-title="ui.steps.hideShortcut" aria-label="Hide the steps" data-i18n-aria-label="ui.steps.hide">‹</button>
       </div>
       <div id="findbar" class="findbar" hidden>
         <div class="findrow">
-          <input id="find-query" type="text" placeholder="Find in steps" />
+          <input id="find-query" type="text" placeholder="Find in steps" data-i18n-placeholder="ui.find.query" />
           <span id="find-count" class="findcount"></span>
-          <button id="find-close" class="findx" title="Close (Esc)">&times;</button>
+          <button id="find-close" class="findx" title="Close (Esc)" data-i18n-title="ui.find.close">&times;</button>
         </div>
         <div class="findrow">
-          <input id="find-replacement" type="text" placeholder="Replace with" />
-          <label class="findopt" title="Match case"><input id="find-case" type="checkbox" /><span>Aa</span></label>
-          <label class="findopt" title="Whole words only"><input id="find-word" type="checkbox" /><span>Word</span></label>
-          <button id="find-go" class="tiny">Replace all</button>
+          <input id="find-replacement" type="text" placeholder="Replace with" data-i18n-placeholder="ui.find.replacement" />
+          <label class="findopt" title="Match case" data-i18n-title="ui.find.matchCase"><input id="find-case" type="checkbox" /><span>Aa</span></label>
+          <label class="findopt" title="Whole words only" data-i18n-title="ui.find.wholeWordsHint"><input id="find-word" type="checkbox" /><span data-i18n="ui.find.wholeWords">Word</span></label>
+          <button id="find-go" class="tiny" data-i18n="ui.find.replaceAll">Replace all</button>
         </div>
       </div>
-      <p id="empty" class="empty">No steps yet.</p>
+      <p id="empty" class="empty" data-i18n="ui.steps.empty">No steps yet.</p>
       <ol id="step-list"></ol>
       <!-- Drag to set the column width; double-click restores the default. -->
       <button type="button" id="steps-resize" class="steps-resize"
-              title="Drag to resize - double-click for the default width"
-              aria-label="Resize the steps column"></button>
+              title="Drag to resize - double-click for the default width" data-i18n-title="ui.steps.resizeHint"
+              aria-label="Resize the steps column" data-i18n-aria-label="ui.steps.resize"></button>
     </aside>
 
     <section class="detail">
       <div id="detail-empty" class="detail-empty">
         <div class="library">
-          <h2 id="library-heading">Recent recordings</h2>
+          <h2 id="library-heading" data-i18n="ui.library.recent">Recent recordings</h2>
           <p id="library-usage" class="library-usage"></p>
           <div class="library-search">
             <input id="library-query" type="search"
-                   placeholder="Search every recording" />
+                   placeholder="Search every recording" data-i18n-placeholder="ui.library.search" />
             <span id="library-found" class="library-found"></span>
           </div>
           <div id="library-list" class="library-list"></div>
           <p id="library-empty" class="library-none" hidden>
-            Nothing recorded yet. Press <strong>New recording</strong>, say what
-            you are making, then use your computer normally — every click, drag and
-            typed value is captured with a screenshot.
+            <span data-i18n="ui.library.emptyLead">Nothing recorded yet. Press</span> <strong data-i18n="ui.common.newRecording">New recording</strong><span data-i18n="ui.library.emptyTail">, say what you are making, then use your computer normally — every click, drag and typed value is captured with a screenshot.</span>
           </p>
         </div>
       </div>
       <div id="detail-body" hidden>
         <input id="detail-text" class="detail-text" type="text"
-               aria-label="Step description" />
+               aria-label="Step description" data-i18n-aria-label="ui.detail.description" />
         <div class="meta">
           <span id="detail-meta"></span>
-          <label class="exclude"><input id="chk-exclude" type="checkbox" /> Exclude from export</label>
+          <label class="exclude"><input id="chk-exclude" type="checkbox" /> <span data-i18n="ui.detail.exclude">Exclude from export</span></label>
         </div>
         <!-- Marking on the left, the two that cannot be undone by drawing again
              on the right, with a divider between. Eight controls on one line
@@ -168,33 +166,33 @@
              every time a tool is added. -->
         <div class="tools">
           <div class="group">
-            <button id="btn-box" class="tool" title="Box" aria-label="Box">
+            <button id="btn-box" class="tool" title="Box" data-i18n-title="ui.tools.box" aria-label="Box" data-i18n-aria-label="ui.tools.box">
               <svg viewBox="0 0 22 22" aria-hidden="true"><rect x="3.5" y="4.5" width="15" height="13" rx="1.5"/></svg>
             </button>
-            <button id="btn-ellipse" class="tool" title="Circle" aria-label="Circle">
+            <button id="btn-ellipse" class="tool" title="Circle" data-i18n-title="ui.tools.circle" aria-label="Circle" data-i18n-aria-label="ui.tools.circle">
               <svg viewBox="0 0 22 22" aria-hidden="true"><ellipse cx="11" cy="11" rx="7.5" ry="6.5"/></svg>
             </button>
-            <button id="btn-arrow" class="tool" title="Arrow" aria-label="Arrow">
+            <button id="btn-arrow" class="tool" title="Arrow" data-i18n-title="ui.tools.arrow" aria-label="Arrow" data-i18n-aria-label="ui.tools.arrow">
               <svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 18 L15 7"/><path d="M9.5 6.5 L16 6 L15.5 12.5" stroke-linejoin="round"/></svg>
             </button>
             <button id="btn-highlight" class="tool"
-                    title="Highlight an area &mdash; right-click to choose a colour"
-                    aria-label="Highlight">
+                    title="Highlight an area &mdash; right-click to choose a colour" data-i18n-title="ui.tools.highlightHint"
+                    aria-label="Highlight" data-i18n-aria-label="ui.tools.highlight">
               <svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 15.5 L12.5 4.5 L17.5 8 L9 19 L4 19 Z"/></svg>
             </button>
             <button id="btn-text" class="tool"
-                    title="Write a label on the picture &mdash; right-click to choose a colour"
-                    aria-label="Label">
+                    title="Write a label on the picture &mdash; right-click to choose a colour" data-i18n-title="ui.tools.labelHint"
+                    aria-label="Label" data-i18n-aria-label="ui.tools.label">
               <svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4.5 6.5 L4.5 4.5 L17.5 4.5 L17.5 6.5"/><path d="M11 4.5 L11 17.5"/><path d="M8 17.5 L14 17.5"/></svg>
             </button>
-            <button id="btn-blur" class="tool" title="Blur area" aria-label="Blur area">
+            <button id="btn-blur" class="tool" title="Blur area" data-i18n-title="ui.tools.blur" aria-label="Blur area" data-i18n-aria-label="ui.tools.blur">
               <svg viewBox="0 0 22 22" aria-hidden="true"><rect x="3.5" y="4.5" width="15" height="13" rx="1.5" stroke-dasharray="3 2.5"/><path d="M7 11 L15 11"/><path d="M7 14 L15 14"/></svg>
             </button>
           </div>
           <span class="divider"></span>
           <div class="group">
             <button id="btn-crop" class="tool"
-                    title="Trim the screenshot to the part that matters" aria-label="Crop">
+                    title="Trim the screenshot to the part that matters" data-i18n-title="ui.tools.cropHint" aria-label="Crop" data-i18n-aria-label="ui.tools.crop">
               <svg viewBox="0 0 22 22" aria-hidden="true"><path d="M6.5 2.5 L6.5 15.5 L19.5 15.5"/><path d="M2.5 6.5 L15.5 6.5 L15.5 19.5"/></svg>
             </button>
           </div>
@@ -213,37 +211,37 @@
             <!-- Any colour, not only the five: picked, or taken off the
                  screenshot, so words can be made to match what is around them. -->
             <span id="mark-custom" class="mark-custom" hidden>
-              <input id="mark-colour-custom" type="color" title="Any colour"
-                     aria-label="Any colour" />
+              <input id="mark-colour-custom" type="color" title="Any colour" data-i18n-title="ui.mark.anyColour"
+                     aria-label="Any colour" data-i18n-aria-label="ui.mark.anyColour" />
               <button id="mark-colour-pick" class="eyedrop" type="button"
-                      title="Take the colour from the screen"
-                      aria-label="Take the colour from the screen">
+                      title="Take the colour from the screen" data-i18n-title="ui.mark.pickColour"
+                      aria-label="Take the colour from the screen" data-i18n-aria-label="ui.mark.pickColour">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 1.9a2 2 0 0 1 2.8 0l.7.7a2 2 0 0 1 0 2.8l-1.4 1.4.7.7-1.1 1.1-.7-.7-5.3 5.3H3.5l-1 1-1-1 1-1v-2.8l5.3-5.3-.7-.7 1.1-1.1.7.7z" fill="currentColor"/></svg>
               </button>
             </span>
             <span id="mark-card" class="mark-card" hidden>
-              <span>Card</span>
-              <input id="mark-card-fill" type="color" title="Card colour"
-                     aria-label="Card colour" />
+              <span data-i18n="ui.mark.card">Card</span>
+              <input id="mark-card-fill" type="color" title="Card colour" data-i18n-title="ui.mark.cardColour"
+                     aria-label="Card colour" data-i18n-aria-label="ui.mark.cardColour" />
               <button id="mark-card-pick" class="eyedrop" type="button"
-                      title="Take the card colour from the screen"
-                      aria-label="Take the card colour from the screen">
+                      title="Take the card colour from the screen" data-i18n-title="ui.mark.pickCardColour"
+                      aria-label="Take the card colour from the screen" data-i18n-aria-label="ui.mark.pickCardColour">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 1.9a2 2 0 0 1 2.8 0l.7.7a2 2 0 0 1 0 2.8l-1.4 1.4.7.7-1.1 1.1-.7-.7-5.3 5.3H3.5l-1 1-1-1 1-1v-2.8l5.3-5.3-.7-.7 1.1-1.1.7.7z" fill="currentColor"/></svg>
               </button>
               <input id="mark-card-opacity" type="range" min="0" max="100" step="5"
-                     title="How solid the card is" aria-label="How solid the card is" />
+                     title="How solid the card is" data-i18n-title="ui.mark.cardOpacity" aria-label="How solid the card is" data-i18n-aria-label="ui.mark.cardOpacity" />
             </span>
             <label id="mark-size-wrap" class="mark-size" hidden>
-              <span>Size</span>
+              <span data-i18n="ui.mark.size">Size</span>
               <select id="mark-size">
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large">Large</option>
+                <option value="small" data-i18n="ui.mark.small">Small</option>
+                <option value="medium" data-i18n="ui.mark.medium">Medium</option>
+                <option value="large" data-i18n="ui.mark.large">Large</option>
               </select>
             </label>
-            <span id="mark-hint" class="mark-hint">Drag it to move it</span>
-            <button id="mark-delete" class="danger">Delete</button>
-            <button id="mark-done">Done</button>
+            <span id="mark-hint" class="mark-hint" data-i18n="ui.mark.moveHint">Drag it to move it</span>
+            <button id="mark-delete" class="danger" data-i18n="ui.common.delete">Delete</button>
+            <button id="mark-done" data-i18n="ui.common.done">Done</button>
           </div>
           <img id="shot" alt="" />
           <!-- The marks somebody has drawn on this step. Under the click
@@ -267,7 +265,7 @@
                saves, Shift+Enter starts a new line. -->
           <textarea id="label-input" class="label-input" hidden rows="1"
                     maxlength="120" spellcheck="false"
-                    aria-label="Label text"></textarea>
+                    aria-label="Label text" data-i18n-aria-label="ui.mark.labelText"></textarea>
         </div>
       </div>
     </section>
@@ -275,207 +273,214 @@
 
   <div id="arming" class="arming" hidden>
     <div class="arming-card">
-      <div class="arming-title">Re-recording step <b id="arming-n"></b></div>
-      <p>Switch to your application and perform the action once.
+      <div class="arming-title"><span data-i18n="ui.arming.title">Re-recording step</span> <b id="arming-n"></b></div>
+      <p data-i18n="ui.arming.instructions">Switch to your application and perform the action once.
          This window will come back automatically.</p>
-      <button id="arming-cancel">Cancel</button>
+      <button id="arming-cancel" data-i18n="ui.common.cancel">Cancel</button>
     </div>
   </div>
 
   <footer class="savebar">
-    <span id="save-state" class="save-state">No recording yet</span>
+    <span id="save-state" class="save-state" data-i18n="ui.save.empty">No recording yet</span>
     <span class="hint" id="hotkey-hint"></span>
-    <button id="btn-shortcuts" class="linky">All shortcuts</button>
-    <button id="btn-reveal" disabled>Show in Explorer</button>
+    <button id="btn-shortcuts" class="linky" data-i18n="ui.shortcuts.all">All shortcuts</button>
+    <button id="btn-reveal" disabled data-i18n="ui.save.reveal">Show in Explorer</button>
   </footer>
 
   <dialog id="keysdlg">
-    <h2>Keyboard shortcuts</h2>
+    <h2 data-i18n="ui.shortcuts.title">Keyboard shortcuts</h2>
 
-    <h3 class="subhead">Anywhere on the machine</h3>
-    <p class="note">These work while you are in the application you are recording,
+    <h3 class="subhead" data-i18n="ui.shortcuts.global">Anywhere on the machine</h3>
+    <p class="note" data-i18n="ui.shortcuts.globalHint">These work while you are in the application you are recording,
        which is the whole point of them.</p>
 
     <div class="keyrow">
-      <span class="k-what">Start, pause and resume</span>
+      <span class="k-what" data-i18n="ui.shortcuts.pause">Start, pause and resume</span>
       <span class="k-keys" id="k-pause"></span>
-      <button class="k-set" data-which="pause" type="button">Change</button>
+      <button class="k-set" data-which="pause" type="button" data-i18n="ui.common.change">Change</button>
     </div>
     <div class="keyrow">
-      <span class="k-what">Stop recording</span>
+      <span class="k-what" data-i18n="ui.shortcuts.stop">Stop recording</span>
       <span class="k-keys" id="k-stop"></span>
-      <button class="k-set" data-which="stop" type="button">Change</button>
+      <button class="k-set" data-which="stop" type="button" data-i18n="ui.common.change">Change</button>
     </div>
     <p class="k-error" id="k-error" hidden></p>
 
-    <h3 class="subhead">In this window</h3>
+    <h3 class="subhead" data-i18n="ui.shortcuts.local">In this window</h3>
     <div class="keyrow static">
-      <span class="k-what">Move between steps</span>
+      <span class="k-what" data-i18n="ui.shortcuts.move">Move between steps</span>
       <span class="k-keys"><kbd>↑</kbd><kbd>↓</kbd></span>
     </div>
     <div class="keyrow static">
-      <span class="k-what">Select several steps</span>
-      <span class="k-keys"><kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+click</span>
+      <span class="k-what" data-i18n="ui.shortcuts.select">Select several steps</span>
+      <span class="k-keys"><kbd>Ctrl</kbd><span data-i18n="ui.shortcuts.clickNext">+click,</span> <kbd>Shift</kbd><span data-i18n="ui.shortcuts.click">+click</span></span>
     </div>
     <div class="keyrow">
-      <span class="k-what">Delete the selection</span>
+      <span class="k-what" data-i18n="ui.shortcuts.delete">Delete the selection</span>
       <!-- A choice rather than a fixed key: many keyboards have no Delete key
            within easy reach. Typing in a text box is never affected. -->
-      <select id="k-delete" class="k-select" aria-label="Key that deletes the selection">
-        <option value="either">Delete or Backspace</option>
-        <option value="delete">Delete only</option>
-        <option value="backspace">Backspace only</option>
+      <select id="k-delete" class="k-select" aria-label="Key that deletes the selection" data-i18n-aria-label="ui.shortcuts.deleteKey">
+        <option value="either" data-i18n="ui.shortcuts.eitherKey">Delete or Backspace</option>
+        <option value="delete" data-i18n="ui.shortcuts.deleteOnly">Delete only</option>
+        <option value="backspace" data-i18n="ui.shortcuts.backspaceOnly">Backspace only</option>
       </select>
       <span></span>
     </div>
     <div class="keyrow static">
-      <span class="k-what">Undo the last change</span>
+      <span class="k-what" data-i18n="ui.shortcuts.undo">Undo the last change</span>
       <span class="k-keys"><kbd>Ctrl</kbd><kbd>Z</kbd></span>
     </div>
     <div class="keyrow static">
-      <span class="k-what">Put it back</span>
+      <span class="k-what" data-i18n="ui.shortcuts.redo">Put it back</span>
       <span class="k-keys"><kbd>Ctrl</kbd><kbd>Y</kbd></span>
     </div>
     <div class="keyrow static">
-      <span class="k-what">Find and replace</span>
+      <span class="k-what" data-i18n="ui.shortcuts.find">Find and replace</span>
       <span class="k-keys"><kbd>Ctrl</kbd><kbd>F</kbd></span>
     </div>
-    <p class="note">Undo and redo are also on the right-click menu, on a step
+    <p class="note" data-i18n="ui.shortcuts.contextHint">Undo and redo are also on the right-click menu, on a step
        and on a screenshot.</p>
 
     <div class="dialog-actions">
-      <button id="k-reset" type="button">Reset to defaults</button>
-      <button id="k-close" class="primary" type="button">Done</button>
+      <button id="k-reset" type="button" data-i18n="ui.shortcuts.reset">Reset to defaults</button>
+      <button id="k-close" class="primary" type="button" data-i18n="ui.common.done">Done</button>
     </div>
   </dialog>
 
   <dialog id="setupdlg">
-    <h2>What are you about to record?</h2>
+    <h2 data-i18n="ui.setup.title">What are you about to record?</h2>
 
     <label class="field">
-      <span>Name</span>
-      <input id="su-name" type="text" placeholder="e.g. Raise a purchase order" />
+      <span data-i18n="ui.setup.name">Name</span>
+      <input id="su-name" type="text" placeholder="e.g. Raise a purchase order" data-i18n-placeholder="ui.setup.namePlaceholder" />
     </label>
 
     <fieldset class="purposes">
-      <legend class="field-legend">This recording is</legend>
+      <legend class="field-legend" data-i18n="ui.setup.purpose">This recording is</legend>
 
       <label class="purpose">
         <input type="radio" name="purpose" value="sop" checked />
-        <span class="p-title">A procedure</span>
-        <span class="p-note">Written as instructions, rendered into an SOP template.</span>
+        <span class="p-title" data-i18n="ui.setup.procedure">A procedure</span>
+        <span class="p-note" data-i18n="ui.setup.procedureHint">Written as instructions, rendered into an SOP template.</span>
       </label>
 
       <label class="purpose">
         <input type="radio" name="purpose" value="training" />
-        <span class="p-title">A training guide</span>
-        <span class="p-note">Written as instructions, no template.</span>
+        <span class="p-title" data-i18n="ui.setup.training">A training guide</span>
+        <span class="p-note" data-i18n="ui.setup.trainingHint">Written as instructions, no template.</span>
       </label>
 
       <label class="purpose">
         <input type="radio" name="purpose" value="evidence" />
-        <span class="p-title">An evidence record</span>
-        <span class="p-note">Kept in the past tense — what was done, not what to do.</span>
+        <span class="p-title" data-i18n="ui.setup.evidence">An evidence record</span>
+        <span class="p-note" data-i18n="ui.setup.evidenceHint">Kept in the past tense — what was done, not what to do.</span>
       </label>
     </fieldset>
 
     <label class="field" id="su-template-field">
-      <span>Template</span>
+      <span data-i18n="ui.setup.template">Template</span>
       <select id="su-template"></select>
       <small>
-        Your own templates live in a folder you can open —
-        <button id="su-templates-open" class="linky" type="button">show me</button>.
-        Drop a .docx or .md in there and it appears here.
+        <span data-i18n="ui.setup.templatesLead">Your own templates live in a folder you can open —</span>
+        <button id="su-templates-open" class="linky" type="button" data-i18n="ui.setup.templatesOpen">show me</button><span data-i18n="ui.setup.templatesTail">. Drop a .docx or .md in there and it appears here.</span>
       </small>
     </label>
 
     <label class="field">
-      <span>Capture</span>
+      <span data-i18n="ui.setup.capture">Capture</span>
       <select id="su-scope"></select>
-      <small>Scoping to one application keeps everything else off the record
+      <small data-i18n="ui.setup.scopeHint">Scoping to one application keeps everything else off the record
              entirely — clicks elsewhere are never captured.</small>
     </label>
 
     <div class="dialog-actions">
-      <button id="su-cancel" type="button">Cancel</button>
-      <button id="su-go" class="primary" type="button">Start recording</button>
+      <button id="su-cancel" type="button" data-i18n="ui.common.cancel">Cancel</button>
+      <button id="su-go" class="primary" type="button" data-i18n="ui.setup.start">Start recording</button>
     </div>
   </dialog>
 
   <dialog id="scopedlg">
-    <h2>What should be recorded?</h2>
-    <p class="note">Scoping a recording to one application keeps everything else
+    <h2 data-i18n="ui.scope.title">What should be recorded?</h2>
+    <p class="note" data-i18n="ui.scope.hint">Scoping a recording to one application keeps everything else
        — mail, chat, whatever is behind it — out of the guide entirely. Clicks
        elsewhere are not captured at all, not merely hidden.</p>
     <div id="scope-list" class="scope-list"></div>
     <div class="dialog-actions">
-      <button id="scope-refresh">Refresh</button>
-      <button id="scope-cancel">Cancel</button>
-      <button id="scope-go" class="primary">Use selection</button>
+      <button id="scope-refresh" data-i18n="ui.scope.refresh">Refresh</button>
+      <button id="scope-cancel" data-i18n="ui.common.cancel">Cancel</button>
+      <button id="scope-go" class="primary" data-i18n="ui.scope.use">Use selection</button>
     </div>
   </dialog>
 
   <dialog id="exportdlg">
-    <h2>Export steps</h2>
+    <h2 data-i18n="ui.export.title">Export steps</h2>
     <label class="field">
-      <span>Title</span>
-      <input id="exp-title" type="text" placeholder="How to raise an invoice" />
+      <span data-i18n="ui.export.documentTitle">Title</span>
+      <input id="exp-title" type="text" placeholder="How to raise an invoice" data-i18n-placeholder="ui.export.titlePlaceholder" />
     </label>
     <label class="field">
-      <span>Format</span>
+      <span data-i18n="ui.export.format">Format</span>
       <select id="exp-format">
-        <option value="html">HTML — one portable file, images embedded</option>
-        <option value="pdf">PDF — for printing or sending on</option>
-        <option value="md">Markdown — for a wiki or repo, images alongside</option>
-        <option value="tex">LaTeX — a fragment to paste into Overleaf</option>
-        <option value="texdoc">LaTeX — a complete document, compiles on its own</option>
-        <option value="texzip">LaTeX — a zip for Overleaf, document and pictures in one</option>
-        <option value="template" id="opt-template">Word, or your own template — choose one in Settings</option>
+        <option value="html" data-i18n="ui.export.html">HTML — one portable file, images embedded</option>
+        <option value="pdf" data-i18n="ui.export.pdf">PDF — for printing or sending on</option>
+        <option value="md" data-i18n="ui.export.markdown">Markdown — for a wiki or repo, images alongside</option>
+        <option value="tex" data-i18n="ui.export.latexFragment">LaTeX — a fragment to paste into Overleaf</option>
+        <option value="texdoc" data-i18n="ui.export.latexDocument">LaTeX — a complete document, compiles on its own</option>
+        <option value="texzip" data-i18n="ui.export.latexZip">LaTeX — a zip for Overleaf, document and pictures in one</option>
+        <option value="template" id="opt-template" data-i18n="ui.export.template">Word, or your own template — choose one in Settings</option>
       </select>
     </label>
     <p class="note" id="exp-note"></p>
     <div class="dialog-actions">
-      <button id="exp-cancel">Cancel</button>
-      <button id="exp-go" class="primary">Export</button>
+      <button id="exp-cancel" data-i18n="ui.common.cancel">Cancel</button>
+      <button id="exp-go" class="primary" data-i18n="ui.common.export">Export</button>
     </div>
   </dialog>
 
   <dialog id="settings">
-    <h2>Settings</h2>
+    <h2 data-i18n="ui.common.settings">Settings</h2>
 
     <!-- Four groups of unrelated things. As one column it was a long
          scroll past three of them to reach the one you came for. -->
     <div class="tabs" role="tablist" id="settings-tabs">
       <button type="button" class="tab" role="tab" id="tabbtn-recording"
               data-tab="recording" aria-controls="tab-recording"
-              aria-selected="true">Recording</button>
+              aria-selected="true" data-i18n="ui.settings.recording">Recording</button>
       <button type="button" class="tab" role="tab" id="tabbtn-screenshots"
               data-tab="screenshots" aria-controls="tab-screenshots"
-              aria-selected="false">Screenshots</button>
+              aria-selected="false" data-i18n="ui.settings.screenshots">Screenshots</button>
       <button type="button" class="tab" role="tab" id="tabbtn-marking"
               data-tab="marking" aria-controls="tab-marking"
-              aria-selected="false">Marking up</button>
+              aria-selected="false" data-i18n="ui.settings.marking">Marking up</button>
       <button type="button" class="tab" role="tab" id="tabbtn-exports"
               data-tab="exports" aria-controls="tab-exports"
-              aria-selected="false">Exports</button>
+              aria-selected="false" data-i18n="ui.settings.exports">Exports</button>
     </div>
 
     <section class="tabpanel" id="tab-recording" role="tabpanel"
              aria-labelledby="tabbtn-recording">
 
     <label class="field">
-      <span>Save recordings to</span>
+      <span data-i18n="ui.settings.language">Language</span>
+      <select id="set-language">
+        <option value="en">English</option>
+        <option value="pt-BR">Português (Brasil)</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span data-i18n="ui.settings.root">Save recordings to</span>
       <div class="row">
         <input id="set-root" type="text" readonly />
-        <button id="set-browse">Browse…</button>
+        <button id="set-browse" data-i18n="ui.settings.browse">Browse…</button>
       </div>
       <small id="set-root-usage" class="hint"></small>
     </label>
 
     <label class="field checkfield">
       <input id="set-keyboard" type="checkbox" />
-      <span>Record keyboard input</span>
-      <small>Typing is grouped per field, never stored keystroke by keystroke.
+      <span data-i18n="ui.settings.keyboard">Record keyboard input</span>
+      <small data-i18n="ui.settings.keyboardHint">Typing is grouped per field, never stored keystroke by keystroke.
              Password fields record only that a password was entered. When this
              is off, no keyboard hook is installed at all.</small>
     </label>
@@ -485,34 +490,34 @@
              aria-labelledby="tabbtn-screenshots" hidden>
 
     <label class="field">
-      <span>Each screenshot shows</span>
+      <span data-i18n="ui.settings.frame">Each screenshot shows</span>
       <select id="set-frame">
-        <option value="window">The window that was clicked (recommended)</option>
-        <option value="monitor">The whole monitor it was on</option>
-        <option value="screen">Every monitor</option>
+        <option value="window" data-i18n="ui.settings.frameWindow">The window that was clicked (recommended)</option>
+        <option value="monitor" data-i18n="ui.settings.frameMonitor">The whole monitor it was on</option>
+        <option value="screen" data-i18n="ui.settings.frameScreen">Every monitor</option>
       </select>
-      <small>Window framing crops the noise and keeps files small. The wider
+      <small data-i18n="ui.settings.frameHint">Window framing crops the noise and keeps files small. The wider
              options help when context around the click matters, or for clicks
              with no window at all — the desktop, taskbar or tray.</small>
     </label>
 
     <label class="field">
-      <span>Screenshot format</span>
+      <span data-i18n="ui.settings.imageFormat">Screenshot format</span>
       <select id="set-format">
-        <option value="png">PNG — lossless, sharp text (recommended)</option>
-        <option value="jpeg">JPEG — smaller, softens text</option>
+        <option value="png" data-i18n="ui.settings.png">PNG — lossless, sharp text (recommended)</option>
+        <option value="jpeg" data-i18n="ui.settings.jpeg">JPEG — smaller, softens text</option>
       </select>
     </label>
 
     <label class="field" id="quality-field">
-      <span>JPEG quality — <b id="set-quality-val">85</b></span>
+      <span><span data-i18n="ui.settings.jpegQuality">JPEG quality —</span> <b id="set-quality-val">85</b></span>
       <input id="set-quality" type="range" min="40" max="100" step="5" />
     </label>
 
     <label class="field">
-      <span>Capture scale — <b id="set-scale-val">100%</b></span>
+      <span><span data-i18n="ui.settings.scale">Capture scale —</span> <b id="set-scale-val">100%</b></span>
       <input id="set-scale" type="range" min="25" max="100" step="5" />
-      <small>Shrinks every screenshot. Degrades text more predictably than
+      <small data-i18n="ui.settings.scaleHint">Shrinks every screenshot. Degrades text more predictably than
              JPEG quality does.</small>
     </label>
     </section>
@@ -522,34 +527,34 @@
 
     <label class="check">
       <input id="set-show-marker" type="checkbox" />
-      <span>Mark where the click was</span>
+      <span data-i18n="ui.settings.showMarker">Mark where the click was</span>
     </label>
-    <p class="hint">On by default. Turn it off if you would rather point things
+    <p class="hint" data-i18n="ui.settings.showMarkerHint">On by default. Turn it off if you would rather point things
       out yourself with the Arrow and Circle tools — no screenshot will carry a
       marker, in the app or in anything you export. You can also hide it on a
       single step by right-clicking that screenshot.</p>
 
     <label class="field">
-      <span>Click indicator</span>
+      <span data-i18n="ui.settings.marker">Click indicator</span>
       <select id="set-marker">
-        <option value="circle">Circle around the click</option>
-        <option value="arrow">Arrow pointing at the click</option>
+        <option value="circle" data-i18n="ui.settings.markerCircle">Circle around the click</option>
+        <option value="arrow" data-i18n="ui.settings.markerArrow">Arrow pointing at the click</option>
       </select>
     </label>
     <label class="check">
       <input id="set-marker-bold" type="checkbox" />
-      <span>Make it bolder</span>
+      <span data-i18n="ui.settings.markerBold">Make it bolder</span>
     </label>
-    <p class="hint">Shown on every screenshot in an export, and in the preview
+    <p class="hint" data-i18n="ui.settings.markerHint">Shown on every screenshot in an export, and in the preview
       above. An arrow reads as an annotation rather than as part of the
       application you are documenting. Drag the marker on a screenshot to move
       it.</p>
 
     <label class="check">
       <input id="set-legend" type="checkbox" />
-      <span>Explain the highlighting in exports</span>
+      <span data-i18n="ui.settings.legend">Explain the highlighting in exports</span>
     </label>
-    <p class="hint">Prints a key at the top of the guide saying what each
+    <p class="hint" data-i18n="ui.settings.legendHint">Prints a key at the top of the guide saying what each
       highlighter colour means — for when a procedure uses more than one and a
       reader has to know the difference. Only the colours actually used are
       listed. Right-click the Highlight tool to change colour while marking.</p>
@@ -560,48 +565,43 @@
              aria-labelledby="tabbtn-exports" hidden>
 
     <label class="field">
-      <span>Organisation name</span>
-      <input id="set-brand" type="text" placeholder="Shown under the title" />
+      <span data-i18n="ui.settings.organisation">Organisation name</span>
+      <input id="set-brand" type="text" placeholder="Shown under the title" data-i18n-placeholder="ui.settings.organisationPlaceholder" />
     </label>
 
     <label class="field">
-      <span>Logo</span>
+      <span data-i18n="ui.settings.logo">Logo</span>
       <div class="row">
-        <input id="set-logo" type="text" readonly placeholder="None" />
-        <button id="set-logo-pick">Choose…</button>
-        <button id="set-logo-clear">Clear</button>
+        <input id="set-logo" type="text" readonly placeholder="None" data-i18n-placeholder="ui.common.none" />
+        <button id="set-logo-pick" data-i18n="ui.settings.choose">Choose…</button>
+        <button id="set-logo-clear" data-i18n="ui.settings.clear">Clear</button>
       </div>
     </label>
 
     <label class="field">
-      <span>Footer</span>
-      <input id="set-footer" type="text" placeholder="e.g. Internal use only" />
+      <span data-i18n="ui.settings.footer">Footer</span>
+      <input id="set-footer" type="text" placeholder="e.g. Internal use only" data-i18n-placeholder="ui.settings.footerPlaceholder" />
     </label>
 
     <label class="field">
-      <span>SOP template</span>
+      <span data-i18n="ui.settings.template">SOP template</span>
       <div class="row">
         <select id="set-template-list"></select>
-        <button id="set-template-clear">Reset</button>
+        <button id="set-template-clear" data-i18n="ui.settings.reset">Reset</button>
       </div>
       <div class="row">
-        <button id="set-template-copy" class="primary">Make a copy</button>
-        <button id="set-template-pick">Use my own file…</button>
-        <button id="set-template-folder">Open folder</button>
+        <button id="set-template-copy" class="primary" data-i18n="ui.settings.copyTemplate">Make a copy</button>
+        <button id="set-template-pick" data-i18n="ui.settings.templateFile">Use my own file…</button>
+        <button id="set-template-folder" data-i18n="ui.settings.templateFolder">Open folder</button>
       </div>
       <input id="set-template" type="hidden" />
-      <small id="template-info">Render recordings into your organisation's own
-             SOP format. One ships with the app, so Word export works without
-             setting anything up. <b>Make a copy</b> to change the wording,
-             letterhead or sections — it opens in Word and is used from then on.
-             Keep the <code>{{…}}</code> markers: they are where the recording
-             goes. Your template file is only ever read, never changed.</small>
+      <small id="template-info"><span data-i18n="ui.settings.templateLead">Render recordings into your organisation's own SOP format. One ships with the app, so Word export works without setting anything up.</span> <b data-i18n="ui.settings.copyTemplate">Make a copy</b> <span data-i18n="ui.settings.templateMiddle">to change the wording, letterhead or sections — it opens in Word and is used from then on. Keep the</span> <code>{{…}}</code><span data-i18n="ui.settings.templateTail"> markers: they are where the recording goes. Your template file is only ever read, never changed.</span></small>
     </label>
     </section>
 
     <div class="dialog-actions">
-      <span id="build" class="build" title="Which build of the app this is"></span>
-      <button id="set-close" class="primary">Done</button>
+      <span id="build" class="build" title="Which build of the app this is" data-i18n-title="ui.settings.build"></span>
+      <button id="set-close" class="primary" data-i18n="ui.common.done">Done</button>
     </div>
   </dialog>
 
@@ -612,6 +612,13 @@
   <script src="crop.js"></script>
   <script src="appname.js"></script>
   <script src="bytes.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="../shared/locales/en/ui.js"></script>
+  <script src="../shared/locales/en/renderer.js"></script>
+  <script src="../shared/locales/en/main.js"></script>
+  <script src="../shared/locales/pt-BR/ui.js"></script>
+  <script src="../shared/locales/pt-BR/renderer.js"></script>
+  <script src="../shared/locales/pt-BR/main.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

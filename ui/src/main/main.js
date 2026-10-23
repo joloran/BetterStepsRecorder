@@ -14,6 +14,7 @@ const photos = require('./photos');
 const { buildLatex, gatherImages, writeImages } = require('./latex');
 const texzip = require('./texzip');
 const messages = require('./messages');
+const i18n = require('../shared/i18n');
 const screenshots = require('./screenshots');
 const { toJpeg, toJpegFrom } = require('./transcode');
 const annotate = require('../renderer/annotate');
@@ -41,10 +42,51 @@ let sidecar = null;
 let session = null;
 let settings = null;
 
+// Read the preference at the point of use so native dialogs and notices follow
+// a language change without restarting the capture process or the window.
+function t(key, params) {
+  return i18n.createTranslator(settings ? settings.values.language : 'en')(key, params);
+}
+
+function fileProblem(err, action) {
+  return messages.fileProblem(err, { action, language: settings ? settings.values.language : 'en' });
+}
+
 // Scope chosen for the next recording: [] means everything.
 let scopePids = [];
 let scopeLabel = 'Everything';
 let recordingPaused = false;
+
+// Native messages translate generic labels at display time. IPC and saved
+// recordings keep canonical labels so the renderer can translate them again
+// after a language change without interpreting translated text as protocol.
+function displayedScope() {
+  if (!scopePids.length) return t('main.scope.everything');
+  return scopeLabel === 'One application' ? t('main.scope.oneApplication') : scopeLabel;
+}
+
+function screenshotSummary(prep) {
+  if (prep.mode !== 'transcoded') return null;
+  return t('main.screenshots.reencoded', {
+    before: (prep.before / 1048576).toFixed(0),
+    after: (prep.after / 1048576).toFixed(0),
+  });
+}
+
+function replacementSummary(changes) {
+  if (!changes.length) return t('main.replace.nothing');
+  return t('main.replace.summary', {
+    occurrences: t('main.replace.occurrences', { count: changes.reduce((n, c) => n + c.count, 0) }),
+    steps: t('main.replace.steps', { count: changes.length }),
+  });
+}
+
+function photoFailures(failed) {
+  if (!failed || !failed.length) return [];
+  // The image converter's native diagnostics remain available for support.
+  for (const problem of failed) log.warn(problem);
+  return [t('main.photos.failed', { count: failed.length })];
+}
 
 // Undo and redo. Session-scoped: it exists to cover a slip during editing, not
 // to be a document revision system. The shape of it lives in history.js -
@@ -165,9 +207,9 @@ function createWindow() {
 /** What somebody is told, afterwards, about a problem a recording survived. */
 function engineNotice(m) {
   if (m.code === 'STEP_FAILED') {
-    return `One step could not be recorded (${m.message}). The rest of the recording carried on.`;
+    return t('main.engine.stepFailed', { message: m.message });
   }
-  return `The capture engine reported a problem it recovered from (${m.code}): ${m.message}`;
+  return t('main.engine.recovered', { code: m.code, message: m.message });
 }
 
 function wireSidecar() {
@@ -387,7 +429,7 @@ let cancelRerecord = null;
 // The old text was a build command - "dotnet build capture" - which means
 // something in a checkout of this repository and nothing to anyone who
 // installed the app.
-const ENGINE_MISSING = "Steps Recorder's capture component is missing. Reinstalling the app puts it back.";
+const engineMissing = () => t('main.engine.missing');
 
 /**
  * Write down that a recording ended, and what ended it.
@@ -522,7 +564,7 @@ async function ensureSidecar() {
 
   const exe = Sidecar.resolveExe(PROJECT_ROOT);
   if (!exe) {
-    return { ok: false, error: ENGINE_MISSING };
+    return { ok: false, error: engineMissing() };
   }
 
   sidecar.start(exe);
@@ -546,7 +588,10 @@ ipcMain.handle('templates:duplicate', async (_e, { path: source } = {}) => {
   const from = source || settings.values.templatePath
             || templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData'));
   const r = templatesLib.duplicate(from, app.getPath('userData'));
-  if (!r.ok) return r;
+  if (!r.ok) {
+    log.warn(r.error);
+    return { ...r, error: t('main.template.copyFailed') };
+  }
 
   // Select the copy immediately: the point of making it is to use it.
   settings.set({ templatePath: r.path });
@@ -585,21 +630,23 @@ async function beginRecording(intent = {}) {
   // underneath the recording already running, and overwrites the clock so the
   // first recording's ending is never written down.
   if (recordingSince) {
-    return { ok: false, error: 'Something is already being recorded.' };
+    return { ok: false, error: t('main.recording.alreadyRunning') };
   }
   if (resuming && !session) {
-    return { ok: false, error: 'There is no recording open to carry on.' };
+    return { ok: false, error: t('main.recording.nothingToContinue') };
   }
   const exe = Sidecar.resolveExe(PROJECT_ROOT);
   log.info(`capture engine: ${exe}`);
   if (!exe) {
-    return { ok: false, error: ENGINE_MISSING };
+    return { ok: false, error: engineMissing() };
   }
 
   const writable = settings.probe();
   if (!writable.ok) {
     leaveCompact();
-    return { ok: false, error: `Cannot write to ${settings.values.saveRoot}: ${writable.error}` };
+    return { ok: false, error: t('main.recording.cannotWrite', {
+      folder: settings.values.saveRoot, message: writable.error,
+    }) };
   }
 
   let dir;
@@ -656,8 +703,7 @@ async function beginRecording(intent = {}) {
       scopeLabel = 'Everything';
       log.warn('this recording predates remembered scopes; continuing records everything');
       send('notice', { kind: 'scope', message:
-        'This recording was made before the app remembered what a recording was '
-        + 'scoped to, so carrying it on records everything on screen.' });
+        t('main.scope.legacyRecording') });
     } else if (!remembered.processes.length) {
       scopePids = [];
       scopeLabel = remembered.label || 'Everything';
@@ -669,15 +715,15 @@ async function beginRecording(intent = {}) {
         // in it, which looks exactly like the recorder being broken.
         const named = remembered.processes.join(', ');
         log.warn(`cannot carry on: ${named} is not running`);
-        return { ok: false, error:
-          `This recording is of ${scopeLabel}, and ${named} is not running. `
-          + 'Start it and press Continue again, or start a new recording.' };
+        return { ok: false, error: t('main.scope.applicationNotRunning', {
+          scope: displayedScope(), applications: named,
+        }) };
       }
       log.info(`continuing, scoped to ${scopeLabel} (${scopePids.join(',')})`);
     }
   } else if (Array.isArray(intent.scopePids)) {
     scopePids = intent.scopePids;
-    scopeLabel = intent.scopeLabel || (intent.scopePids.length ? 'One application' : 'Everything');
+    scopeLabel = intent.scopePids.length ? (intent.scopeLabel || 'One application') : 'Everything';
     // Written into the recording while the programs are still running and can
     // be asked their names.
     session.setScope({ label: scopeLabel, processes: await processesFor(scopePids) });
@@ -702,7 +748,7 @@ async function beginRecording(intent = {}) {
   });
 
   if (!started) {
-    return { ok: false, error: 'The recorder could not start. Try again; if it keeps happening, restart Steps Recorder.' };
+    return { ok: false, error: t('main.recording.startFailed') };
   }
 
   // Only once recording is genuinely under way: shrinking for a start that
@@ -781,7 +827,7 @@ ipcMain.handle('recording:pause', () => {
   // The window is not the only way in, and a pause with nothing recording
   // leaves `recordingPaused` set for the NEXT recording - where the first press
   // of the pause hotkey then reads as a resume and silently does nothing.
-  if (!recordingSince) return { ok: false, error: 'Nothing is being recorded.' };
+  if (!recordingSince) return { ok: false, error: t('main.recording.notRunning') };
   recordingPaused = true;
   sidecar.pause();
   // A recording that was paused and a recording that stopped by itself look
@@ -791,7 +837,7 @@ ipcMain.handle('recording:pause', () => {
   return { ok: true };
 });
 ipcMain.handle('recording:resume', () => {
-  if (!recordingSince) return { ok: false, error: 'Nothing is being recorded.' };
+  if (!recordingSince) return { ok: false, error: t('main.recording.notRunning') };
   recordingPaused = false;
   sidecar.resume();
   log.info('recording resumed');
@@ -831,7 +877,10 @@ function finishRecording(reason = 'stopped') {
     if (advice) {
       log.info(`size notice: ${(advice.total / 1048576).toFixed(0)}MB, `
                + `${(advice.average / 1048576).toFixed(1)}MB per shot`);
-      send('notice', { kind: 'size', message: advice.message });
+      send('notice', { kind: 'size', message: t('main.screenshots.sizeAdvice', {
+        total: (advice.total / 1048576).toFixed(0),
+        average: (advice.average / 1048576).toFixed(1),
+      }) });
     }
   }
 
@@ -848,7 +897,7 @@ function finishRecording(reason = 'stopped') {
  * still carry on a recording the person had closed.
  */
 ipcMain.handle('session:close', () => {
-  if (recordingSince) return { ok: false, error: 'Stop the recording first.' };
+  if (recordingSince) return { ok: false, error: t('main.recording.stopFirst') };
   if (session) log.info(`closed the recording at ${session.dir}`);
   closeSession();
   session = null;
@@ -865,10 +914,10 @@ ipcMain.handle('session:close', () => {
  * it is.
  */
 ipcMain.handle('session:discard', async () => {
-  if (recordingSince) return { ok: false, error: 'Stop the recording first.' };
+  if (recordingSince) return { ok: false, error: t('main.recording.stopFirst') };
   if (!session) return { ok: true };
   if (session.steps.length) {
-    return { ok: false, error: 'This recording has steps in it, so it was kept.' };
+    return { ok: false, error: t('main.recording.keptNonempty') };
   }
 
   const dir = session.dir;
@@ -891,7 +940,7 @@ ipcMain.handle('session:discard', async () => {
   } catch (err) {
     log.error(err);
     return { ok: false,
-             error: messages.fileProblem(err, { action: 'move the empty recording to the Recycle Bin' }) };
+             error: fileProblem(err, 'move the empty recording to the Recycle Bin') };
   }
 });
 
@@ -926,16 +975,16 @@ ipcMain.handle('session:get', () => ({
 }));
 
 ipcMain.handle('photo:add', async (_e, { files, afterId }) => {
-  if (!session) return { ok: false, error: 'Open or start a recording first.' };
+  if (!session) return { ok: false, error: t('main.recording.openOrStartFirst') };
 
   // No files named means "ask me": the button and a drag both end up here, and
   // only one of them arrives with paths.
   let chosen = Array.isArray(files) ? files.filter(Boolean) : [];
   if (!chosen.length) {
     const r = await dialog.showOpenDialog(win, {
-      title: 'Add photos',
+      title: t('main.dialog.addPhotos'),
       properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Photos', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'webp'] }],
+      filters: [{ name: t('main.filter.photos'), extensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'webp'] }],
     });
     if (r.canceled || !r.filePaths.length) return { ok: false, cancelled: true };
     chosen = r.filePaths;
@@ -943,8 +992,9 @@ ipcMain.handle('photo:add', async (_e, { files, afterId }) => {
 
   // Chosen from elsewhere on the disk: those files are not the recording's to
   // move, so they are copied in and left where they were.
-  return photos.importInto(session, chosen,
-                           { afterId, keepOriginal: true, onWarn: log.warn });
+  const imported = photos.importInto(session, chosen,
+                                    { afterId, keepOriginal: true, onWarn: log.warn });
+  return { ...imported, failed: photoFailures(imported.failed) };
 });
 
 // Adding a note or a heading is undone by taking it out again, which is a
@@ -1044,10 +1094,10 @@ ipcMain.handle('edit:undoDepth', () => history.depth);
  * the application.
  */
 ipcMain.handle('steps:replaceAll', (_e, { query, replacement, options }) => {
-  if (!session) return { ok: false, error: 'No recording is open.' };
+  if (!session) return { ok: false, error: t('main.recording.notOpen') };
 
   const changes = find.plan(session.steps, query, replacement, options || {});
-  if (!changes.length) return { ok: true, changes: 0, message: find.describe([]) };
+  if (!changes.length) return { ok: true, changes: 0, message: replacementSummary([]) };
 
   // Read the prior state before writing any of it. Gathering it afterwards
   // would report whatever the write left behind, which is only the right
@@ -1066,7 +1116,7 @@ ipcMain.handle('steps:replaceAll', (_e, { query, replacement, options }) => {
 
   pushUndo({ type: 'retext', changes: before });
 
-  return { ok: true, changes: changes.length, message: find.describe(changes),
+  return { ok: true, changes: changes.length, message: replacementSummary(changes),
            steps: session.steps };
 });
 
@@ -1080,7 +1130,7 @@ ipcMain.handle('step:reorder', (_e, { from, to }) => {
 
 ipcMain.handle('session:open', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: 'Open recording', properties: ['openDirectory'],
+    title: t('main.dialog.openRecording'), properties: ['openDirectory'],
   });
   if (r.canceled || !r.filePaths[0]) return { ok: false };
 
@@ -1092,7 +1142,7 @@ ipcMain.handle('session:open', async () => {
   const opened = Session.load(r.filePaths[0]);
   if (opened.unreadable) {
     log.warn(`refused ${opened.dir}: ${opened.unreadable}`);
-    return { ok: false, error: opened.unreadable };
+    return { ok: false, error: t('main.recording.unreadable') };
   }
 
   closeSession();
@@ -1106,7 +1156,7 @@ ipcMain.handle('session:open', async () => {
 
   return { ok: true, dir: session.dir, name: session.name, steps: session.steps,
            photos: taken && taken.added.length ? taken.added.length : 0,
-           photoErrors: (taken && taken.failed) || [] };
+           photoErrors: photoFailures(taken && taken.failed) };
 });
 
 /**
@@ -1138,7 +1188,7 @@ ipcMain.handle('shot:data', (_e, { screenshot }) => {
  */
 function rewriteScreenshot(step, dataUrl) {
   const match = /^data:image\/png;base64,(.+)$/.exec(dataUrl || '');
-  if (!match) return { ok: false, error: 'Expected a PNG data URL.' };
+  if (!match) return { ok: false, error: t('main.screenshot.expectedPng') };
 
   // A screenshot can be shared: the engine writes one file when two
   // consecutive captures are identical. Editing in place would edit the other
@@ -1146,7 +1196,7 @@ function rewriteScreenshot(step, dataUrl) {
   // destructive pixel write in the application comes through here, which is
   // why this is the only place that has to remember.
   if (!session.forkScreenshot(step)) {
-    return { ok: false, error: 'Could not give that step a screenshot of its own.' };
+    return { ok: false, error: t('main.screenshot.forkFailed') };
   }
 
   // The write. A crafted recording naming a path outside itself would have
@@ -1155,7 +1205,7 @@ function rewriteScreenshot(step, dataUrl) {
   // here most of all.
   const file = paths.safeJoin(session.dir, step.screenshot);
   if (!file) {
-    return { ok: false, error: 'That step points outside the recording.' };
+    return { ok: false, error: t('main.screenshot.outsideRecording') };
   }
 
   const bytes = Buffer.from(match[1], 'base64');
@@ -1169,7 +1219,7 @@ function rewriteScreenshot(step, dataUrl) {
     session.discard(token);
     try { fs.unlinkSync(temp); } catch { /* may not exist */ }
     log.error(err);
-    return { ok: false, error: `Could not update the screenshot: ${err.message}` };
+    return { ok: false, error: t('main.screenshot.updateFailed', { message: err.message }) };
   }
 
   return { ok: true, token };
@@ -1184,13 +1234,13 @@ function rewriteScreenshot(step, dataUrl) {
  * longer the size of its frame breaks the one thing every exporter assumes.
  */
 ipcMain.handle('step:crop', (_e, { id, dataUrl, rect, image }) => {
-  if (!session) return { ok: false, error: 'No recording is open.' };
+  if (!session) return { ok: false, error: t('main.recording.notOpen') };
 
   const step = session.steps.find((s) => s.id === id);
-  if (!step || !step.screenshot) return { ok: false, error: 'Step not found.' };
-  if (!rect || !image) return { ok: false, error: 'No region to crop to.' };
+  if (!step || !step.screenshot) return { ok: false, error: t('main.step.notFound') };
+  if (!rect || !image) return { ok: false, error: t('main.screenshot.noCropRegion') };
   if (!crop.isDeliberate(rect, image)) {
-    return { ok: false, error: 'That region is too small to crop to.' };
+    return { ok: false, error: t('main.screenshot.cropTooSmall') };
   }
 
   const written = rewriteScreenshot(step, dataUrl);
@@ -1273,10 +1323,10 @@ ipcMain.handle('step:crop', (_e, { id, dataUrl, rect, image }) => {
  * every export and the crop arithmetic follow without knowing this exists.
  */
 ipcMain.handle('step:marker', (_e, { id, at, hidden, angle }) => {
-  if (!session) return { ok: false, error: 'No recording is open.' };
+  if (!session) return { ok: false, error: t('main.recording.notOpen') };
 
   const step = session.steps.find((s) => s.id === id);
-  if (!step) return { ok: false, error: 'Step not found.' };
+  if (!step) return { ok: false, error: t('main.step.notFound') };
 
   const wanted = at && Number.isFinite(at.x) && Number.isFinite(at.y)
     ? { x: Math.max(0, Math.min(100, at.x)), y: Math.max(0, Math.min(100, at.y)) }
@@ -1314,10 +1364,10 @@ ipcMain.handle('step:marker', (_e, { id, at, hidden, angle }) => {
  * are now. That is also what makes each of them exactly one Ctrl+Z.
  */
 ipcMain.handle('step:marks', (_e, { id, marks }) => {
-  if (!session) return { ok: false, error: 'No recording is open.' };
+  if (!session) return { ok: false, error: t('main.recording.notOpen') };
 
   const step = session.steps.find((s) => s.id === id);
-  if (!step) return { ok: false, error: 'Step not found.' };
+  if (!step) return { ok: false, error: t('main.step.notFound') };
 
   pushUndo({ type: 'marks', id, marks: [...(step.marks || [])] });
 
@@ -1326,10 +1376,10 @@ ipcMain.handle('step:marks', (_e, { id, marks }) => {
 });
 
 ipcMain.handle('step:redact', (_e, { id, dataUrl, kind = 'blur', colour = '' }) => {
-  if (!session) return { ok: false, error: 'No recording is open.' };
+  if (!session) return { ok: false, error: t('main.recording.notOpen') };
 
   const step = session.steps.find((s) => s.id === id);
-  if (!step || !step.screenshot) return { ok: false, error: 'Step not found.' };
+  if (!step || !step.screenshot) return { ok: false, error: t('main.step.notFound') };
 
   // The pre-blur image is kept so the edit can be undone. Blur destroys pixels
   // by design; that is only defensible if a slip is recoverable while the
@@ -1384,7 +1434,7 @@ ipcMain.handle('export:run', async (_e, args) => {
     // click handler where nothing catches: the dialog closes and the export
     // silently does not happen.
     log.error(err);
-    return { ok: false, error: messages.fileProblem(err, { action: 'export the guide' }) };
+    return { ok: false, error: fileProblem(err, 'export the guide') };
   }
 });
 
@@ -1396,7 +1446,7 @@ ipcMain.handle('export:run', async (_e, args) => {
  */
 ipcMain.handle('export:show', (_e, { how } = {}) => {
   if (!lastExported || !fs.existsSync(lastExported)) {
-    return { ok: false, error: 'That export is no longer where it was saved.' };
+    return { ok: false, error: t('main.export.missing') };
   }
   if (how === 'folder') shell.showItemInFolder(lastExported);
   else shell.openPath(lastExported);
@@ -1465,7 +1515,7 @@ function htmlImages(s, { assetDir, assetHref }) {
   if (screenshots.canEmbed(prep.after)) {
     return {
       imageSrc: (abs) => dataUriFor(abs, prep.images && prep.images.get(abs)),
-      warning: screenshots.describe(prep),
+      warning: screenshotSummary(prep),
     };
   }
 
@@ -1485,9 +1535,7 @@ function htmlImages(s, { assetDir, assetHref }) {
 
   return {
     imageSrc: (abs) => (names.has(abs) ? `${assetHref}/${names.get(abs)}` : null),
-    warning: `Too large to embed even re-encoded, so the screenshots were `
-           + `written to ${path.basename(assetDir)} beside the document. `
-           + `That folder has to travel with it.`,
+    warning: t('main.export.externalImages', { folder: path.basename(assetDir) }),
   };
 }
 
@@ -1514,7 +1562,7 @@ function markerOptions() {
 
 async function runExport({ format, title }) {
   if (!session || !session.steps.length) {
-    return { ok: false, error: 'Nothing to export yet.' };
+    return { ok: false, error: t('main.export.nothing') };
   }
 
   const safeTitle = (title || session.name || 'Recorded steps').trim() || 'Recorded steps';
@@ -1537,23 +1585,23 @@ async function runExport({ format, title }) {
     || templatesLib.defaultFor(PROJECT_ROOT, app.getPath('userData'))
     || '';
   if (format === 'template' && !templateForSession) {
-    return { ok: false, error: 'No template is available to render into.' };
+    return { ok: false, error: t('main.export.noTemplate') };
   }
 
   const filters = {
-    html: [{ name: 'Web page', extensions: ['html'] }],
+    html: [{ name: t('main.filter.webPage'), extensions: ['html'] }],
     md: [{ name: 'Markdown', extensions: ['md'] }],
-    tex: [{ name: 'LaTeX fragment', extensions: ['tex'] }],
-    texdoc: [{ name: 'LaTeX document', extensions: ['tex'] }],
-    texzip: [{ name: 'Zip for Overleaf', extensions: ['zip'] }],
+    tex: [{ name: t('main.filter.latexFragment'), extensions: ['tex'] }],
+    texdoc: [{ name: t('main.filter.latexDocument'), extensions: ['tex'] }],
+    texzip: [{ name: t('main.filter.overleafZip'), extensions: ['zip'] }],
     pdf: [{ name: 'PDF', extensions: ['pdf'] }],
     template: templateForSession.toLowerCase().endsWith('.docx')
-      ? [{ name: 'Word document', extensions: ['docx'] }]
-      : [{ name: 'Document', extensions: ['md', 'html', 'txt'] }],
+      ? [{ name: t('main.filter.wordDocument'), extensions: ['docx'] }]
+      : [{ name: t('main.filter.document'), extensions: ['md', 'html', 'txt'] }],
   }[format];
 
   const chosen = await dialog.showSaveDialog(win, {
-    title: 'Export steps',
+    title: t('main.dialog.exportSteps'),
     // The LaTeX exports are .tex files whatever they are called; the zip is a
     // .zip, and `format` is the name of neither.
     defaultPath: path.join(settings.values.saveRoot,
@@ -1691,31 +1739,23 @@ async function runExport({ format, title }) {
         file: out,
         warning: [
           zipped
-            ? `Upload this to Overleaf: New Project, Upload Project. It holds the `
-              + `document and its screenshots, and compiles as it is.`
+            ? t('main.export.overleafZip')
             : standalone
-              ? `Upload both to Overleaf - this file and the ${imageDir} folder beside `
-                + `it - and compile. Set it as the main document if the project has more `
-                + `than one.`
-              : `Upload both to Overleaf - this file and the ${imageDir} folder beside `
-                + `it - then add \\input{${base}} where the procedure belongs.`,
+              ? t('main.export.overleafDocument', { folder: imageDir })
+              : t('main.export.overleafFragment', { folder: imageDir, base }),
           marks.shared
-            ? `${marks.shared} step(s) share a screenshot; it carries the first `
-              + `step's marker.`
+            ? t('main.export.sharedScreenshots', { count: marks.shared })
             : null,
           // Measured in Overleaf: 37 full-size PNGs came to 14MB and took a free
           // project to the edge of its compile timeout. Better said here than
           // discovered as a build that never finishes.
           missing.length
-            ? `${missing.length} screenshot(s) the document asks for are not in the `
-              + `export; those figures will be empty.`
+            ? t('main.export.emptyFigures', { count: missing.length })
             : null,
           imageBytes > 8 * 1024 * 1024
-            ? `The screenshots come to ${Math.round(imageBytes / 1048576)}MB - a free `
-              + `Overleaf project may run out of compile time on that many. Settings, `
-              + `Screenshots, JPEG at 85% is about a quarter of the size.`
+            ? t('main.export.overleafSize', { size: Math.round(imageBytes / 1048576) })
             : null,
-          screenshots.describe(prep),
+          screenshotSummary(prep),
         ].filter(Boolean).join(' '),
       };
 
@@ -1727,7 +1767,7 @@ async function runExport({ format, title }) {
     } else if (format === 'template') {
       const tpl = templateForSession;
       if (!fs.existsSync(tpl)) {
-        return { ok: false, error: `The template is no longer at ${tpl}` };
+        return { ok: false, error: t('main.export.templateMissing', { path: tpl }) };
       }
 
       // Word templates go through their own renderer: a .docx is a zip of XML
@@ -1773,9 +1813,9 @@ async function runExport({ format, title }) {
           file: out,
           warning: [
             missing.length
-              ? `${missing.length} screenshot(s) were missing and left out`
+              ? t('main.export.missingImages', { count: missing.length })
               : null,
-            screenshots.describe(prep),
+            screenshotSummary(prep),
           ].filter(Boolean).join(' ') || null,
         };
       }
@@ -1800,7 +1840,7 @@ async function runExport({ format, title }) {
         // Surfaced rather than swallowed: a mistyped hook silently produces a
         // document with a gap in it, which nobody notices until an auditor does.
         warning: report.unknown.length
-          ? `Unrecognised hooks left untouched: ${report.unknown.join(', ')}`
+          ? t('main.export.unknownHooks', { hooks: report.unknown.join(', ') })
           : null,
       };
 
@@ -1815,7 +1855,7 @@ async function runExport({ format, title }) {
 
   } catch (err) {
     log.error(err);
-    return { ok: false, error: messages.fileProblem(err, { action: 'export the guide' }) };
+    return { ok: false, error: fileProblem(err, 'export the guide') };
   }
 }
 
@@ -1877,8 +1917,8 @@ async function exportPdf(title, outFile, brand) {
 }
 
 ipcMain.handle('step:rerecord', async (_e, { id }) => {
-  if (!session) return { ok: false, error: 'No recording is open.' };
-  if (!session.steps.some((s) => s.id === id)) return { ok: false, error: 'Step not found.' };
+  if (!session) return { ok: false, error: t('main.recording.notOpen') };
+  if (!session.steps.some((s) => s.id === id)) return { ok: false, error: t('main.step.notFound') };
 
   const booted = await ensureSidecar();
   if (!booted.ok) return booted;
@@ -1934,7 +1974,7 @@ ipcMain.handle('step:rerecord', async (_e, { id }) => {
   if (captured === 'cancelled') return { ok: false, cancelled: true };
   return captured
     ? { ok: true, step: session.steps.find((s) => s.id === id) }
-    : { ok: false, error: 'No click came within two minutes, so the step was left as it was.' };
+    : { ok: false, error: t('main.rerecord.timeout') };
 });
 
 ipcMain.handle('step:rerecordCancel', () => {
@@ -1946,7 +1986,12 @@ ipcMain.handle('step:rerecordCancel', () => {
  * Recent recordings, newest first. Read straight from disk so the list is
  * correct even for sessions this process never opened.
  */
-ipcMain.handle('library:list', () => library.list(settings.values.saveRoot));
+ipcMain.handle('library:list', () => library.list(settings.values.saveRoot).map((row) => {
+  if (!row.unreadable) return row;
+  log.warn(`${row.dir}: ${row.unreadable}`);
+  return { ...row, unreadable: t('main.recording.unreadable'),
+           unreadableLabel: t('main.recording.unreadableLabel') };
+}));
 
 /**
  * Searches every recording, not the open one.
@@ -1977,13 +2022,13 @@ ipcMain.handle('library:search', (_e, { query, options } = {}) => {
     return { ok: true, results: archive.search(root, query, options || {}) };
   } catch (err) {
     log.error(err);
-    return { ok: false, error: `Could not search: ${err.message}` };
+    return { ok: false, error: t('main.library.searchFailed', { message: err.message }) };
   }
 });
 
 ipcMain.handle('library:open', (_e, { dir }) => {
   if (!dir || !fs.existsSync(path.join(dir, 'session.json'))) {
-    return { ok: false, error: 'That recording is no longer there.' };
+    return { ok: false, error: t('main.recording.missing') };
   }
 
   const opened = Session.load(dir);
@@ -1991,7 +2036,7 @@ ipcMain.handle('library:open', (_e, { dir }) => {
     // Deliberately not adopted as the current session: a recording this
     // version must not write to is one it must not hold open either.
     log.warn(`refused ${dir}: ${opened.unreadable}`);
-    return { ok: false, error: opened.unreadable };
+    return { ok: false, error: t('main.recording.unreadable') };
   }
 
   closeSession();
@@ -2008,7 +2053,7 @@ ipcMain.handle('library:open', (_e, { dir }) => {
 
   return { ok: true, dir: session.dir, name: session.name, steps: session.steps,
            photos: taken && taken.added.length ? taken.added.length : 0,
-           photoErrors: (taken && taken.failed) || [] };
+           photoErrors: photoFailures(taken && taken.failed) };
 });
 
 ipcMain.handle('session:rename', (_e, { name }) =>
@@ -2023,7 +2068,7 @@ ipcMain.handle('session:rename', (_e, { name }) =>
  */
 ipcMain.handle('session:verify', async () => {
   if (!session || !session.steps.length) {
-    return { ok: false, error: 'Open a recording first.' };
+    return { ok: false, error: t('main.recording.openFirst') };
   }
 
   const booted = await ensureSidecar();
@@ -2040,7 +2085,7 @@ ipcMain.handle('session:verify', async () => {
   }));
 
   const results = await sidecar.verify(items);
-  if (!results) return { ok: false, error: 'The capture engine did not answer.' };
+  if (!results) return { ok: false, error: t('main.engine.noAnswer') };
 
   const at = new Date().toISOString();
   const byId = new Map(results.map((r) => [r.id, r]));
@@ -2070,7 +2115,7 @@ ipcMain.handle('windows:list', async () => {
 
 ipcMain.handle('scope:set', (_e, { pids, label }) => {
   scopePids = Array.isArray(pids) ? pids : [];
-  scopeLabel = label || 'Everything';
+  scopeLabel = scopePids.length ? (label || 'One application') : 'Everything';
   log.info(`capture scope: ${scopeLabel} (${scopePids.join(',') || 'all'})`);
   return { ok: true, label: scopeLabel };
 });
@@ -2122,15 +2167,14 @@ ipcMain.handle('shortcuts:set', (_e, { which, accelerator }) => {
     // registerHotkeys, not a bare return: capture released them, and refusing
     // a chord must not be the same as turning both hotkeys off.
     registerHotkeys();
-    return { ok: false, error: 'That needs a modifier — Ctrl, Alt or Shift — '
-                             + 'or a function key on its own.' };
+    return { ok: false, error: t('main.shortcuts.modifierRequired') };
   }
 
   const other = which === 'stop' ? 'hotkeyPause' : 'hotkeyStop';
   const resolved = shortcuts.resolve(settings.values);
   if (accelerator === (which === 'stop' ? resolved.pause : resolved.stop)) {
     registerHotkeys();
-    return { ok: false, error: 'Pause and stop cannot share a shortcut.' };
+    return { ok: false, error: t('main.shortcuts.same') };
   }
 
   const previous = settings.values[key];
@@ -2143,8 +2187,7 @@ ipcMain.handle('shortcuts:set', (_e, { which, accelerator }) => {
     // leaving the user with a shortcut that silently does nothing.
     settings.update({ [key]: previous });
     registerHotkeys();
-    return { ok: false, error: 'Another application is already using that '
-                             + 'combination. Kept the previous one.' };
+    return { ok: false, error: t('main.shortcuts.inUse') };
   }
 
   log.info(`hotkey ${which} rebound to ${accelerator}`);
@@ -2157,8 +2200,8 @@ ipcMain.handle('settings:set', (_e, patch) => settings.update(patch));
 
 ipcMain.handle('settings:chooseTemplate', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: 'Choose an SOP template',
-    filters: [{ name: 'Templates', extensions: ['docx', 'md', 'html', 'txt'] }],
+    title: t('main.dialog.chooseTemplate'),
+    filters: [{ name: t('main.filter.templates'), extensions: ['docx', 'md', 'html', 'txt'] }],
     properties: ['openFile'],
   });
   if (r.canceled || !r.filePaths[0]) return { ok: false };
@@ -2171,7 +2214,7 @@ ipcMain.handle('settings:chooseTemplate', async () => {
       ? await docx.inspect(r.filePaths[0])
       : templating.inspect(fs.readFileSync(r.filePaths[0], 'utf8'));
   } catch (err) {
-    return { ok: false, error: `Could not read that template: ${err.message}` };
+    return { ok: false, error: t('main.template.readFailed', { message: err.message }) };
   }
 
   return {
@@ -2183,8 +2226,8 @@ ipcMain.handle('settings:chooseTemplate', async () => {
 
 ipcMain.handle('settings:chooseLogo', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: 'Choose a logo for exports',
-    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg'] }],
+    title: t('main.dialog.chooseLogo'),
+    filters: [{ name: t('main.filter.images'), extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg'] }],
     properties: ['openFile'],
   });
   if (r.canceled || !r.filePaths[0]) return { ok: false };
@@ -2193,7 +2236,7 @@ ipcMain.handle('settings:chooseLogo', async () => {
 
 ipcMain.handle('settings:chooseFolder', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: 'Where should recordings be saved?',
+    title: t('main.dialog.chooseFolder'),
     defaultPath: settings.values.saveRoot,
     properties: ['openDirectory', 'createDirectory'],
   });

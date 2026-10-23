@@ -74,7 +74,8 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.primary:hover:not(:disabled) { background: #3d7ded; }
 button.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
 
-.status { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.status { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); min-width: 0; }
+.status .dot { flex-shrink: 0; }
 /* A recording's name can be long, and the toolbar's buttons must not be pushed
    off the end by it: the name gives way first. */
 #status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30ch; }
@@ -835,7 +836,7 @@ button.tool.active {
    recognisable rather than in a list of similar cards. */
 .lib-row.current { border-color: var(--accent); }
 .lib-row.current .lib-name::after {
-  content: 'open now';
+  content: attr(data-open-label);
   margin-left: 8px;
   padding: 1px 6px;
   border-radius: 999px;
@@ -904,7 +905,7 @@ button.tool.active {
    target rather than a small zone: somebody dragging thirty photos in should
    not have to aim. */
 body.dropping::after {
-  content: 'Drop the photos to add them';
+  content: attr(data-drop-photos-label);
   position: fixed;
   inset: 12px;
   z-index: 90;

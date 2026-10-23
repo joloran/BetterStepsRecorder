@@ -17,6 +17,16 @@ before the change is considered done.
 
 ## 1. What this is
 
+**Interface localization.** English and Brazilian Portuguese are available in
+Settings, persisted as `language` alongside existing preferences. English is
+the default for older settings files. A shared, dependency-free UMD translator
+and per-locale catalogs serve the isolated renderer and Electron main process
+without new renderer privileges or IPC channels. Semantic message keys, named
+parameters, locale-aware plurals and English fallback allow additional locales
+without changing capture or recording formats. Changes apply without reloading
+the editor; recorded descriptions, authored content and templates keep their
+wording. See [LOCALIZATION.md](LOCALIZATION.md) for conventions and validation.
+
 A Windows screen-capture tool that turns a task performed on screen into a
 document somebody else can follow. A replacement for the deprecated
 `PSR.exe`.

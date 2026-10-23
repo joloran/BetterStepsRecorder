@@ -1,3 +1,27 @@
+const tr = (key, params) => BsrI18n.t(`renderer.${key}`, params);
+
+// Labels derived from protocol identifiers belong to the interface. Recorded
+// wording and product names continue to come from the recording unchanged.
+const actionWord = (action) => ['leftClick', 'rightClick', 'doubleClick', 'drag', 'keyPress', 'photo'].includes(action)
+  ? tr(`action.${action}`) : BsrAppName.actionWord(action);
+const colourName = (colour) => {
+  const key = `renderer.colour.${colour.id}`;
+  const label = BsrI18n.t(key);
+  return label === key ? colour.name : label;
+};
+const scopeLabel = (label) => label === 'Everything' ? tr('scope.everything')
+  : label === 'One application' ? tr('scope.oneApplication') : (label || '');
+
+// Keep the shared size/rounding rules; let the UI locale choose the decimal
+// separator without changing stored sizes or document output.
+function formatBytes(bytes) {
+  const [amount, unit] = BsrBytes.human(bytes).split(' ');
+  const digits = (amount.split('.')[1] || '').length;
+  return new Intl.NumberFormat(BsrI18n.getLocale(), {
+    useGrouping: false, minimumFractionDigits: digits, maximumFractionDigits: digits,
+  }).format(Number(amount)) + ' ' + unit;
+}
+
 const $ = (id) => document.getElementById(id);
 
 const el = {
@@ -11,6 +35,7 @@ const el = {
   shot: $('shot'), indicator: $('indicator'),
   saveState: $('save-state'), reveal: $('btn-reveal'),
   settingsBtn: $('btn-settings'), dialog: $('settings'),
+  language: $('set-language'),
   root: $('set-root'), browse: $('set-browse'), format: $('set-format'),
   quality: $('set-quality'), qualityVal: $('set-quality-val'),
   qualityField: $('quality-field'),
@@ -92,8 +117,8 @@ let state = 'idle';   // idle | recording | paused
 function setState(next) {
   state = next;
   el.cDot.className = 'dot ' + (next === 'recording' ? 'rec' : next === 'paused' ? 'paused' : 'idle');
-  el.cState.textContent = next === 'paused' ? 'Paused' : 'Recording';
-  el.cPause.textContent = next === 'paused' ? 'Resume' : 'Pause';
+  el.cState.textContent = next === 'paused' ? tr('state.paused') : tr('state.recording');
+  el.cPause.textContent = next === 'paused' ? tr('state.resume') : tr('state.pause');
   el.dot.className = 'dot ' + (next === 'recording' ? 'rec' : next === 'paused' ? 'paused' : 'idle');
   paintStatus();
 
@@ -199,9 +224,6 @@ el.stepsResize.addEventListener('pointerdown', (e) => {
 // A dragged-away column is fiddly to put back by hand.
 el.stepsResize.addEventListener('dblclick', () => setStepsWidth(WIDTH_DEFAULT));
 
-// A dragged-away column is fiddly to put back by hand.
-
-
 /**
  * What the status line says.
  *
@@ -216,13 +238,13 @@ el.stepsResize.addEventListener('dblclick', () => setStepsWidth(WIDTH_DEFAULT));
  * the same recording would be worse than one uninteresting word.
  */
 function paintStatus() {
-  if (state === 'recording') { el.status.textContent = 'Recording'; return; }
-  if (state === 'paused') { el.status.textContent = 'Paused'; return; }
+  if (state === 'recording') { el.status.textContent = tr('state.recording'); return; }
+  if (state === 'paused') { el.status.textContent = tr('state.paused'); return; }
 
   const recorded = BsrSections.countSteps(steps);
-  if (!openDir || !recorded) { el.status.textContent = 'Idle'; return; }
+  if (!openDir || !recorded) { el.status.textContent = tr('state.idle'); return; }
 
-  const count = `${recorded} step${recorded === 1 ? '' : 's'}`;
+  const count = tr('count.steps', { count: recorded });
   const name = (el.sessionName.value || '').trim();
   el.status.textContent = name ? `${count} · ${name}` : count;
 }
@@ -242,7 +264,7 @@ function paintContinue() {
   const nothingOpen = state === 'idle' && !openDir && steps.length === 0;
   document.body.classList.toggle('nothing-open', nothingOpen);
   // "Untitled recording" over an empty window read as being inside one.
-  el.sessionName.placeholder = nothingOpen ? 'No recording open' : 'Untitled recording';
+  el.sessionName.placeholder = nothingOpen ? tr('recording.noneOpen') : tr('recording.untitled');
   el.sessionName.disabled = nothingOpen;
 
   el.continueBtn.hidden = !(state === 'idle' && openDir && steps.length > 0);
@@ -284,7 +306,7 @@ function renderList() {
   // photograph or a written step, and there is nothing to add them after.
 
   const recorded = BsrSections.countSteps(steps);
-  el.cCount.textContent = `${recorded} step${recorded === 1 ? '' : 's'}`;
+  el.cCount.textContent = tr('count.steps', { count: recorded });
   el.empty.hidden = steps.length > 0;
   el.railCount.textContent = String(steps.length);
   el.list.replaceChildren();
@@ -326,11 +348,11 @@ function renderList() {
     const title = document.createElement('div');
     title.className = 'title';
     title.textContent = isSection
-      ? (s.text || '').trim() || 'Untitled section'
+      ? (s.text || '').trim() || tr('section.untitled')
       // A photograph with no caption yet shows the name its camera gave it,
       // which is the only thing distinguishing thirty of them in a list.
       : BsrAppName.rowTitle(s, recordedBefore(i))
-        || (s.action === 'photo' ? s.source || 'Photo' : BsrAppName.actionWord(s.action));
+        || (s.action === 'photo' ? s.source || tr('action.photo') : actionWord(s.action));
 
     const v = s.verify;
     const stale = v && (v.status === 'missing');
@@ -342,26 +364,26 @@ function renderList() {
     // styling already say what it is, and the word only crowds a short name.
     // A note keeps its label, which distinguishes it from a recorded step.
     sub.textContent = isSection
-      ? (s.excluded ? 'excluded'
-         : !(s.text || '').trim() ? 'not named yet \u2014 will not appear in the guide'
+      ? (s.excluded ? tr('step.excluded')
+         : !(s.text || '').trim() ? tr('section.unnamed')
          : '')
       : isNote
-      ? (s.excluded ? 'note · excluded' : 'note')
+      ? (s.excluded ? tr('note.excluded') : tr('note.label'))
       // The application only where it changes - a recording in one program
       // printed that program's name under every single row - and what was
       // done in a person's words rather than the engine's.
       : [appChangedAt(i) ? BsrAppName.friendly(s.window?.process, s.window?.product) : null,
-         BsrAppName.actionWord(s.action), s.excluded ? 'excluded' : null]
+         actionWord(s.action), s.excluded ? tr('step.excluded') : null]
           .filter(Boolean).join(' · ');
 
     if (v && !isNote) {
       const flag = document.createElement('span');
       flag.className = 'flag' + (v.status === 'match' ? ' ok' : '');
       flag.textContent = {
-        missing: ' · no longer found',
+        missing: tr('verify.flagMissing'),
         match: '',
-        appNotRunning: ' · app not running',
-        inconclusive: ' · could not check',
+        appNotRunning: tr('verify.flagAppNotRunning'),
+        inconclusive: tr('verify.flagInconclusive'),
         noTarget: '',
       }[v.status] || '';
       if (flag.textContent) sub.append(flag);
@@ -419,8 +441,7 @@ async function select(id) {
   }
   if (isNote && armedTool) armTool(armedTool);   // disarm: nothing to draw on
 
-  el.text.placeholder = isSection ? 'Name this phase of the procedure'
-                      : isNote ? 'Describe what the reader should do' : '';
+  paintStepLabels(step);
   el.indicator.style.display = 'none';
   el.indicator.replaceChildren();
 
@@ -429,9 +450,26 @@ async function select(id) {
   // the PREVIOUS step's screenshot and details on screen.
   if (isNote) {
     el.shot.removeAttribute('src');
-    el.meta.textContent = isSection
-      ? 'Section heading — groups the steps below it, and is not numbered'
-      : 'Written step — appears in the guide without a screenshot';
+    return;
+  }
+
+  const url = await window.bsr.shotUrl(step.screenshot);
+  // Cache-bust: a re-recorded step swaps the file behind the same <img>.
+  // Query, not fragment: a fragment is not part of the cache key, so blurring
+  // in place (same filename) would keep showing the unredacted image.
+  const version = encodeURIComponent(`${step.rerecordedAt || ''}-${step.editedAt || ''}`);
+  el.shot.src = url ? `${url}?v=${version}` : '';
+  el.shot.onload = () => placeIndicator(step);
+}
+
+/** Updates interface labels without replacing the selected step or its edits. */
+function paintStepLabels(step) {
+  const isSection = BsrSections.isSection(step);
+  const isNote = step.action === 'note' || isSection;
+  el.text.placeholder = isSection ? tr('section.placeholder')
+                      : isNote ? tr('note.placeholder') : '';
+  if (isNote) {
+    el.meta.textContent = isSection ? tr('section.meta') : tr('note.meta');
     return;
   }
 
@@ -441,23 +479,16 @@ async function select(id) {
   const rowIndex = steps.indexOf(step);
   const stepNumber = steps.slice(0, rowIndex + 1).filter((s) => BsrSections.isStep(s)).length;
   el.meta.textContent = [
-    `Step ${stepNumber}`,
-    BsrAppName.actionWord(step.action),
+    tr('step.number', { number: stepNumber }),
+    actionWord(step.action),
     step.window?.title ? `"${step.window.title}"` : null,
     step.point ? `${step.point.x}, ${step.point.y}` : null,
-    step.monitor ? `${Math.round(step.monitor.scale * 100)}% scaling` : null,
-    step.rerecordedAt ? 're-recorded' : null,
-    step.redacted ? 'redacted' : null,
+    step.monitor ? tr('step.scaling', { scale: Math.round(step.monitor.scale * 100) }) : null,
+    step.rerecordedAt ? tr('step.rerecorded') : null,
+    step.redacted ? tr('step.redacted') : null,
     step.verify ? verifyLabel(step.verify) : null,
   ].filter(Boolean).join('   ·   ');
 
-  const url = await window.bsr.shotUrl(step.screenshot);
-  // Cache-bust: a re-recorded step swaps the file behind the same <img>.
-  // Query, not fragment: a fragment is not part of the cache key, so blurring 
-  // in place (same filename) would keep showing the unredacted image.
-  const version = encodeURIComponent(`${step.rerecordedAt || ''}-${step.editedAt || ''}`);
-  el.shot.src = url ? `${url}?v=${version}` : '';
-  el.shot.onload = () => placeIndicator(step);
 }
 
 /**
@@ -467,12 +498,12 @@ async function select(id) {
  * Doing this in CSS pixels instead is what makes indicators drift on scaled displays.
  */
 function verifyLabel(v) {
-  const when = v.at ? new Date(v.at).toLocaleString() : '';
+  const when = v.at ? new Date(v.at).toLocaleString(BsrI18n.getLocale()) : '';
   return {
-    missing: `control no longer found (checked ${when})`,
-    match: `still matches (checked ${when})`,
-    appNotRunning: 'not checked — app was not running',
-    inconclusive: 'could not check reliably',
+    missing: tr('verify.missing', { when }),
+    match: tr('verify.match', { when }),
+    appNotRunning: tr('verify.appNotRunning'),
+    inconclusive: tr('verify.inconclusive'),
     noTarget: null,
   }[v.status] || null;
 }
@@ -549,12 +580,13 @@ function placeMarkHandles(step) {
   const mark = (step.marks || []).find((m) => m.id === selectedMarkId);
   if (!mark) return;
 
-  const SAYS = { from: 'Drag to swing the tail', to: 'Drag to move the point' };
+  const SAYS = { from: tr('mark.dragTail'), to: tr('mark.dragPoint') };
   for (const handle of BsrAnnotate.handlesOf(mark)) {
     const dot = document.createElement('div');
     dot.className = `mark-handle h-${handle.key}`;
     dot.dataset.handle = handle.key;
-    dot.title = SAYS[handle.key] || 'Drag to resize';
+    dot.title = SAYS[handle.key] || tr('mark.dragResize');
+    dot.dataset.i18nTitle = 'renderer.' + ({ from: 'mark.dragTail', to: 'mark.dragPoint' }[handle.key] || 'mark.dragResize');
     dot.style.left = `${handle.x}%`;
     dot.style.top = `${handle.y}%`;
     el.markHandles.append(dot);
@@ -593,7 +625,8 @@ function placeIndicator(step) {
     const p = BsrMarker.plan({ x: pos.x, y: pos.y }, opts);
     const handle = document.createElement('div');
     handle.className = 'rotate-handle';
-    handle.title = 'Drag to turn the arrow';
+    handle.title = tr('mark.dragTurn');
+    handle.dataset.i18nTitle = 'renderer.mark.dragTurn';
     // Percent for the tip, pixels for the offset out to the tail.
     handle.style.left = `calc(${pos.x}% + ${Math.round(p.tailX - p.tipX)}px)`;
     handle.style.top = `calc(${pos.y}% + ${Math.round(p.tailY - p.tipY)}px)`;
@@ -635,7 +668,7 @@ function paintShortcuts(state) {
                                 [el.kStop, state.stopActive]]) {
     if (!active) {
       const warn = document.createElement('span');
-      warn.textContent = ' in use elsewhere';
+      warn.textContent = tr('shortcut.inUse');
       warn.style.color = 'var(--rec)';
       node.append(warn);
     }
@@ -644,11 +677,11 @@ function paintShortcuts(state) {
   el.hotkeyHint.replaceChildren(keycaps(state.pause));
   // "start/pause", because the same key does both depending on whether
   // anything is recording - and the start half is the one nobody knew about.
-  el.hotkeyHint.append(' start/pause');
+  el.hotkeyHint.append(tr('shortcut.startPause'));
   const sep = document.createElement('span');
   sep.className = 'sep';
   sep.textContent = '\u00b7';
-  el.hotkeyHint.append(sep, keycaps(state.stop), ' stop');
+  el.hotkeyHint.append(sep, keycaps(state.stop), tr('shortcut.stop'));
 }
 
 async function refreshShortcuts() {
@@ -712,9 +745,9 @@ let listeningFor = null;
 /** Stops listening, whatever the reason, and puts the global hotkeys back. */
 async function stopListening() {
   if (!listeningFor) return;
-  const { row, btn, label } = listeningFor;
+  const { row, btn } = listeningFor;
   row.classList.remove('listening');
-  btn.textContent = label;
+  btn.textContent = BsrI18n.t('ui.common.change');
   listeningFor = null;
   await window.bsr.captureKeys(false);
   await refreshShortcuts();
@@ -725,8 +758,8 @@ for (const btn of document.querySelectorAll('.k-set')) {
     const row = btn.closest('.keyrow');
     listeningFor = { which: btn.dataset.which, row, btn, label: btn.textContent };
     row.classList.add('listening');
-    btn.textContent = 'Press keys\u2026';
-    row.querySelector('.k-keys').textContent = 'press a combination, or Esc to cancel';
+    btn.textContent = tr('shortcut.pressKeys');
+    row.querySelector('.k-keys').textContent = tr('shortcut.combination');
     el.kError.hidden = true;
     // The application's own hotkeys are taken at the operating system, ahead
     // of this window - so until they are released, the chord being replaced
@@ -804,12 +837,10 @@ function acceleratorFrom(e) {
   else if (e.key === ' ' || e.code === 'Space') main = 'Space';
   else if (NAMED_KEYS[e.key]) main = NAMED_KEYS[e.key];
   else if (e.key.length === 1) main = e.key.toUpperCase();
-  else return { error: `${e.key} cannot be part of a global shortcut. `
-                     + 'Try a letter, a number or a function key.' };
+  else return { error: tr('shortcut.unsupported', { key: e.key }) };
 
   if (!mods.length && !/^F\d{1,2}$/.test(main)) {
-    return { error: 'That needs a modifier — Ctrl, Alt or Shift — '
-                  + 'or a function key on its own.' };
+    return { error: tr('shortcut.modifierRequired') };
   }
   return { accelerator: [...mods, main].join('+') };
 }
@@ -828,8 +859,20 @@ window.bsr.onHotkeys(paintShortcuts);
  * occurrences" points the reader at a page that has nothing to do with what
  * just happened.
  */
+let currentNotice = null;
+
 function showNotice(message, { settings = false, actions = [] } = {}) {
-  el.noticeText.textContent = message;
+  // Keep translated messages as functions so the visible notice can follow a
+  // language change while retaining its actions and captured paths/counts.
+  currentNotice = { message, settings, actions };
+  paintNotice();
+  el.notice.hidden = false;
+}
+
+function paintNotice() {
+  if (!currentNotice) return;
+  const { message, settings, actions } = currentNotice;
+  el.noticeText.textContent = typeof message === 'function' ? message() : message;
   el.noticeSettings.hidden = !settings;
   // Buttons for the obvious next move - Undo, Open, Show in folder - so a notice
   // that reports something can also offer what to do about it. Replaced on
@@ -838,16 +881,15 @@ function showNotice(message, { settings = false, actions = [] } = {}) {
   for (const a of actions) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.textContent = a.label;
+    b.textContent = typeof a.label === 'function' ? a.label() : a.label;
     b.addEventListener('click', () => { el.notice.hidden = true; a.run(); });
     el.noticeActions.append(b);
   }
-  el.notice.hidden = false;
 }
 
 // The engine's notices are about capture settings, which is where the link
 // earns its place.
-window.bsr.onNotice(({ message }) => showNotice(message, { settings: true }));
+window.bsr.onNotice(({ message }) => showNotice(() => message, { settings: true }));
 
 el.noticeClose.addEventListener('click', () => { el.notice.hidden = true; });
 
@@ -939,7 +981,8 @@ async function openSetup() {
   if (!templates.length) {
     const opt = document.createElement('option');
     opt.value = '';
-    opt.textContent = 'No templates found';
+    opt.textContent = tr('template.none');
+    opt.dataset.i18n = 'renderer.template.none';
     el.suTemplate.append(opt);
   }
 
@@ -947,7 +990,8 @@ async function openSetup() {
   el.suScope.replaceChildren();
   const everything = document.createElement('option');
   everything.value = '';
-  everything.textContent = 'Everything on screen';
+  everything.textContent = tr('scope.screen');
+  everything.dataset.i18n = 'renderer.scope.screen';
   el.suScope.append(everything);
 
   const r = await window.bsr.listWindows();
@@ -957,7 +1001,10 @@ async function openSetup() {
     seen.add(w.pid);
     const opt = document.createElement('option');
     opt.value = String(w.pid);
-    opt.textContent = `Only ${w.process} — ${w.title}`;
+    opt.dataset.scopeLabel = `${w.process} — ${w.title}`;
+    opt.dataset.process = w.process;
+    opt.dataset.windowTitle = w.title;
+    opt.textContent = tr('scope.only', { process: w.process, title: w.title });
     el.suScope.append(opt);
   }
 
@@ -970,8 +1017,8 @@ async function openSetup() {
   el.suScope.value = available ? chosen : '';
   if (chosen && !available) {
     // Not widened silently: the program is gone, so say what that means here.
-    showNotice(`${scopeChoice.label} is not running any more, so this recording is set to `
-             + 'everything on screen. Choose a program in the dialog if that is not what you want.');
+    const name = scopeChoice.label;
+    showNotice(() => tr('scope.unavailable', { name: scopeLabel(name) }));
   }
 
   syncPurpose();
@@ -991,13 +1038,13 @@ el.suGo.addEventListener('click', async () => {
     templatePath: purpose === 'sop' ? el.suTemplate.value : '',
     scopePids: pid ? [Number(pid)] : [],
     scopeLabel: pid
-      ? el.suScope.selectedOptions[0].textContent.replace(/^Only /, '')
+      ? el.suScope.selectedOptions[0].dataset.scopeLabel
       : 'Everything',
   };
   el.setupDlg.close();
 
   const r = await window.bsr.startRecording(intent);
-  if (!r.ok) { showNotice(r.error); return; }
+  if (!r.ok) { showNotice(() => r.error); return; }
   recordingBegan(r);
 });
 
@@ -1018,7 +1065,7 @@ function recordingBegan(r) {
     marked.clear();
   }
   el.sessionName.value = r.name || '';
-  el.scopeBtn.textContent = `Capture: ${r.scope}`;
+  el.scopeBtn.textContent = tr('scope.capture', { scope: scopeLabel(r.scope) });
   recordingScope = r.scope || '';
   el.notice.hidden = true;
   el.finished.hidden = true;
@@ -1041,7 +1088,7 @@ function recordingBegan(r) {
  */
 el.continueBtn.addEventListener('click', async () => {
   const r = await window.bsr.continueRecording();
-  if (!r.ok) { showNotice(r.error); return; }
+  if (!r.ok) { showNotice(() => r.error); return; }
   recordingBegan(r);
 });
 
@@ -1094,16 +1141,16 @@ function recordingFinished() {
  */
 function offerDiscard() {
   const only = recordingScope && recordingScope !== 'Everything' ? recordingScope : '';
-  showNotice(only
-    ? `Nothing was recorded. Only clicks in ${only} are captured in this recording.`
-    : 'Nothing was recorded.', {
-    actions: [{ label: 'Discard it', run: discardEmpty }],
+  showNotice(() => only
+    ? tr('recording.nothingInScope', { scope: only })
+    : tr('recording.nothing'), {
+    actions: [{ label: () => tr('recording.discard'), run: discardEmpty }],
   });
 }
 
 async function discardEmpty() {
   const r = await window.bsr.discardRecording();
-  if (!r || !r.ok) { showNotice((r && r.error) || 'The empty recording was kept.'); return; }
+  if (!r || !r.ok) { showNotice(() => (r && r.error) || tr('recording.keptEmpty')); return; }
   forgetOpen();
   await showLibrary();
 }
@@ -1119,8 +1166,8 @@ function showFinished() {
   const n = BsrSections.countSteps(steps);
   if (!n) { el.finished.hidden = true; return; }
   const name = (el.sessionName.value || '').trim();
-  const count = `${n} step${n === 1 ? '' : 's'}`;
-  el.finishedText.textContent = name ? `Saved \u2014 ${name}, ${count}` : `Saved \u2014 ${count}`;
+  const count = tr('count.steps', { count: n });
+  el.finishedText.textContent = name ? tr('saved.named', { name, count }) : tr('saved.unnamed', { count });
   // The notice bar is left as it is. It is where everything meant for after a
   // recording goes - a program that could not be seen, a step that failed, the
   // size of the screenshots - because the strip has no room for it. Hiding it
@@ -1137,7 +1184,7 @@ function showFinished() {
 async function closeRecording() {
   if (state !== 'idle') return;
   const r = await window.bsr.closeSession();
-  if (r && r.ok === false) { if (r.error) showNotice(r.error); return; }
+  if (r && r.ok === false) { if (r.error) showNotice(() => r.error); return; }
   forgetOpen();
   await showLibrary();
 }
@@ -1163,7 +1210,7 @@ el.finishedNew.addEventListener('click', () => { el.finished.hidden = true; open
 
 async function openFromDisk() {
   const r = await window.bsr.openSession();
-  if (!r.ok) { if (r.error) showNotice(r.error); return; }
+  if (!r.ok) { if (r.error) showNotice(() => r.error); return; }
   // The same as opening it from the list. This had its own copy, which had
   // fallen behind: the name box kept the previous recording's name, ticked
   // steps from that one stayed counted, and nothing was selected, so the
@@ -1201,8 +1248,8 @@ async function deleteSelection() {
   }
 
   const n = r.removed || ids.length;
-  showNotice(`Deleted ${n} step${n === 1 ? '' : 's'}.`, {
-    actions: [{ label: 'Undo', run: () => undoOnce() }],
+  showNotice(() => tr('step.deleted', { count: n }), {
+    actions: [{ label: () => tr('history.undo'), run: () => undoOnce() }],
   });
 }
 
@@ -1326,17 +1373,31 @@ window.bsr.onStep(({ replaced, index, step }) => {
 // recorded. This bar exists so that is visible rather than merely true.
 function savedState(count, dir) {
   openDir = dir;
+  el.reveal.disabled = false;
+  repaintSaveState = () => paintSavedState(count, dir);
+  paintSavedState(count, dir);
+}
+
+/** Draw a saved footer without changing which recording is open. */
+function paintSavedState(count, dir) {
   el.saveState.replaceChildren();
   const tick = document.createElement('span');
   tick.className = 'ok';
-  tick.textContent = '✓ Saved';
+  tick.textContent = tr('saved.label');
   const rest = document.createElement('span');
-  rest.textContent = ` · ${count} step${count === 1 ? '' : 's'} · `;
+  rest.textContent = ` · ${tr('count.steps', { count })} · `;
   const path = document.createElement('span');
   path.className = 'path';
   path.textContent = dir;
   el.saveState.append(tick, rest, path);
-  el.reveal.disabled = false;
+}
+
+// Preserve the current footer's meaning when translating the page. A saved
+// path stays a saved path; an in-progress export remains an export.
+let repaintSaveState = null;
+function showSaveMessage(message) {
+  repaintSaveState = () => { el.saveState.textContent = message(); };
+  repaintSaveState();
 }
 
 window.bsr.onSaved(({ dir, count }) => savedState(count, dir));
@@ -1350,8 +1411,7 @@ window.bsr.onError((m) => {
   console.error('[capture]', m);
   if (state !== 'idle') recordingFinished();
   else setState('idle');
-  showNotice('The recorder hit a problem it could not recover from. Try again; if it keeps '
-           + 'happening, restart Steps Recorder. The details are in the log.');
+  showNotice(() => tr('error.capture'));
 });
 
 /**
@@ -1366,9 +1426,7 @@ window.bsr.onExit((m = {}) => {
   if (!m.duringRecording) { setState('idle'); return; }
   recordingFinished();
   const n = m.steps || 0;
-  showNotice('The recording stopped unexpectedly'
-           + (n ? ` after ${n} step${n === 1 ? '' : 's'}` : '')
-           + '. Everything recorded up to then is saved - press Continue this recording to carry on.');
+  showNotice(() => tr('recording.unexpectedStop', { after: n ? tr('recording.stoppedAfter', { count: n }) : '' }));
 });
 
 /**
@@ -1380,7 +1438,9 @@ window.bsr.onExit((m = {}) => {
  * to read afterwards, when somebody opens the recording and wonders where the
  * steps went.
  */
-function paintBlocked(m) {
+let blockedState = null;
+function paintBlocked(m, { notice = true } = {}) {
+  blockedState = m;
   const shut = Boolean(m && m.blocked);
   el.compactBar.classList.toggle('blocked', shut);
   el.cBlocked.hidden = !shut;
@@ -1392,13 +1452,11 @@ function paintBlocked(m) {
 
   // The filename, because a program running as administrator will not tell a
   // lesser one its product name.
-  const name = BsrAppName.friendly(m.process, '') || 'this program';
-  el.cBlocked.textContent = `Can't see ${name}: running as administrator`;
-  el.cBlocked.title = `${name} is running as administrator, and Windows does not let `
-    + `Steps Recorder see what happens in it, so nothing there is being recorded.`;
-  showNotice(`Clicks in ${name} were not recorded: it was running as administrator, `
-    + `and Windows does not let Steps Recorder see into it. Start ${name} the normal `
-    + `way, or run Steps Recorder as administrator too.`);
+  const program = BsrAppName.friendly(m.process, '');
+  const name = program || tr('blocked.program');
+  el.cBlocked.textContent = tr('blocked.label', { name });
+  el.cBlocked.title = tr('blocked.tooltip', { name });
+  if (notice) showNotice(() => tr('blocked.notice', { name: program || tr('blocked.program') }));
 }
 
 window.bsr.onBlocked(paintBlocked);
@@ -1428,7 +1486,7 @@ async function rerecordSelected() {
   el.arming.hidden = true;
 
   if (r && r.cancelled) return;
-  if (!r || !r.ok) { showNotice((r && r.error) || 'That step could not be re-recorded.'); return; }
+  if (!r || !r.ok) { showNotice(() => (r && r.error) || tr('error.rerecord')); return; }
 }
 
 // Cancel used to hide the overlay and nothing else: the window stayed
@@ -1462,38 +1520,31 @@ window.bsr.onReplaced(({ index, step }) => {
  * unusable.
  */
 async function checkRecording() {
-  if (!steps.length) { showNotice('Open a recording first.'); return; }
+  if (!steps.length) { showNotice(() => tr('error.openFirst')); return; }
 
-  el.saveState.textContent = 'Checking\u2026';
+  showSaveMessage(() => tr('verify.checking'));
   try {
     const r = await window.bsr.verifySession();
     if (!r.ok) {
       // Or the status line reads "Checking..." for the rest of the session.
-      el.saveState.textContent = '';
-      showNotice(r.error);
+      showSaveMessage(() => '');
+      showNotice(() => r.error);
       return;
     }
 
     steps = r.steps;
     renderList();
 
-    const t = r.tally || {};
-    const stale = t.missing || 0;
-    const notRunning = t.appNotRunning || 0;
-    const parts = [];
-    parts.push(stale
-      ? `${stale} of ${r.checked} steps no longer match`
-      : `all ${r.checked} checked steps still match`);
-    if (notRunning) parts.push(`${notRunning} could not be checked (app not running)`);
-    el.saveState.textContent = parts.join(' · ');
-
-    // Deliberately not an alert: a routine result should not freeze the window,
-    // and the marked rows already say which steps are affected. The remedy is
-    // named in the status line instead.
-    if (stale) {
-      el.saveState.textContent = parts.join(' · ')
-        + ' — select one and use "Re-record step"';
-    }
+    showSaveMessage(() => {
+      const tally = r.tally || {};
+      const stale = tally.missing || 0;
+      const notRunning = tally.appNotRunning || 0;
+      const parts = [stale
+        ? tr('verify.staleCount', { count: stale, checked: r.checked })
+        : tr('verify.matchCount', { count: r.checked })];
+      if (notRunning) parts.push(tr('verify.uncheckedCount', { count: notRunning }));
+      return parts.join(' · ') + (stale ? tr('verify.rerecordHint') : '');
+    });
   } finally {
     // The status line carries the answer, so there is nothing to put back.
   }
@@ -1550,17 +1601,17 @@ el.recordings.addEventListener('click', (e) => {
   e.stopPropagation();
   const r = el.recordings.getBoundingClientRect();
   showContext(r.left, r.bottom + 4, [
-    { label: 'Your recordings, and the search',
+    { label: tr('library.menuHome'),
       enabled: !atHome(),
       run: () => showLibrary() },
-    { label: 'Open one from anywhere\u2026', run: () => openFromDisk() },
-    { label: 'Close this recording',
+    { label: tr('library.menuOpen'), run: () => openFromDisk() },
+    { label: tr('library.menuClose'),
       enabled: Boolean(openDir) && state === 'idle',
       run: () => closeRecording() },
     null,
     // Rare, and it needs the application it describes to be running - which is
     // exactly why it stopped being a button that sat in the window all day.
-    { label: 'Check this recording still matches',
+    { label: tr('library.menuCheck'),
       enabled: steps.length > 0,
       run: () => checkRecording() },
   ]);
@@ -1575,7 +1626,7 @@ el.recordings.addEventListener('click', (e) => {
  */
 async function openRecording(dir, at = null) {
   const res = await window.bsr.openLibrary(dir);
-  if (!res.ok) { showNotice(res.error); renderLibrary(); return false; }
+  if (!res.ok) { showNotice(() => res.error); renderLibrary(); return false; }
   return showOpened(res, at);
 }
 
@@ -1590,11 +1641,9 @@ async function showOpened(res, at = null) {
   // because a recording that quietly grew four steps between one opening and
   // the next would be alarming rather than convenient.
   if (res.photos) {
-    showNotice(`${res.photos} photo${res.photos === 1 ? '' : 's'} from the `
-             + `recording's folder ${res.photos === 1 ? 'was' : 'were'} added `
-             + `at the end. The originals are in its originals folder.`);
+    showNotice(() => tr('photos.discovered', { count: res.photos }));
   }
-  if (res.photoErrors && res.photoErrors.length) showNotice(res.photoErrors.join(' '));
+  if (res.photoErrors && res.photoErrors.length) showNotice(() => res.photoErrors.join(' '));
 
   steps = res.steps;
   selectedId = null;
@@ -1669,7 +1718,8 @@ function libraryRow(r, query) {
 
   const name = document.createElement('div');
   name.className = 'lib-name';
-  const label = r.name || 'Untitled recording';
+  name.dataset.openLabel = BsrI18n.t('ui.library.openNow');
+  const label = r.name || tr('recording.untitled');
   if (query) name.append(highlighted(label, query));
   else name.textContent = label;
 
@@ -1681,22 +1731,22 @@ function libraryRow(r, query) {
   // version" over a recording that was simply damaged - the listing was right,
   // the refusal was right, and the words under it were wrong.
   meta.textContent = r.unreadable
-    ? (r.unreadableLabel || 'Cannot be opened here')
-    : (r.app || 'No application recorded');
+    ? (r.unreadableLabel || tr('library.unreadable'))
+    : (r.app || tr('library.noApp'));
 
   const count = document.createElement('div');
   count.className = 'lib-count';
   const n = document.createElement('div');
-  n.textContent = `${r.steps} step${r.steps === 1 ? '' : 's'}`;
+  n.textContent = tr('count.steps', { count: r.steps });
   const when = document.createElement('div');
   when.className = 'lib-when';
-  when.textContent = r.savedAt ? new Date(r.savedAt).toLocaleString() : '';
+  when.textContent = r.savedAt ? new Date(r.savedAt).toLocaleString(BsrI18n.getLocale()) : '';
 
   // What this one costs. A single recording of anything animated can be most
   // of a folder, and without this the only way to find it is Explorer.
   const size = document.createElement('div');
   size.className = 'lib-size';
-  size.textContent = r.bytes ? BsrBytes.human(r.bytes) : '';
+  size.textContent = r.bytes ? formatBytes(r.bytes) : '';
 
   count.append(n, size, when);
 
@@ -1726,7 +1776,7 @@ function libraryRow(r, query) {
     if (r.more) {
       const more = document.createElement('li');
       more.className = 'lib-more';
-      more.textContent = `and ${r.more} more in this recording`;
+      more.textContent = tr('library.moreHits', { count: r.more });
       list.append(more);
     }
     row.append(list);
@@ -1748,7 +1798,7 @@ async function paintUsage() {
   if (!u || !u.ok) { el.libraryUsage.textContent = ''; return; }
 
   el.libraryUsage.replaceChildren();
-  el.libraryUsage.append('Recordings save as you go to ');
+  el.libraryUsage.append(tr('library.saveTo'));
 
   const path = document.createElement('span');
   path.className = 'path';
@@ -1759,19 +1809,16 @@ async function paintUsage() {
   // Amber past a gigabyte. Not a warning - just the point at which somebody
   // would want to know without having gone looking.
   if (u.bytes >= 1024 * 1024 * 1024) size.className = 'heavy';
-  size.textContent = ` \u2014 ${u.recordings} recording${u.recordings === 1 ? '' : 's'}, `
-                   + BsrBytes.human(u.bytes);
+  size.textContent = ` — ${tr('count.recordings', { count: u.recordings })}, ${formatBytes(u.bytes)}`;
   el.libraryUsage.append(size);
 
   // Settings says the same thing beside the folder it is about.
   if (el.rootUsage) {
     const held = u.recordings
-      ? `Currently ${u.recordings} recording${u.recordings === 1 ? '' : 's'}, `
-        + `${BsrBytes.human(u.bytes)}. `
-      : 'No recordings yet. ';
+      ? tr('library.currentUsage', { count: u.recordings, size: formatBytes(u.bytes) })
+      : tr('library.noRecordings');
     el.rootUsage.textContent = held
-      + 'Recordings save as you go, so there is no Save button - there is '
-      + 'nothing to save.';
+      + tr('library.autoSave');
   }
 }
 
@@ -1794,7 +1841,7 @@ async function renderLibrary() {
     const rows = await window.bsr.listLibrary();
     if (stamp !== librarySearchAt) return;
     paintUsage();
-    el.libraryHeading.textContent = 'Recent recordings';
+    el.libraryHeading.textContent = tr('library.recent');
     el.libraryFound.textContent = '';
     el.libraryList.replaceChildren();
     el.libraryEmpty.hidden = rows.length > 0;
@@ -1804,7 +1851,7 @@ async function renderLibrary() {
       const more = document.createElement('button');
       more.type = 'button';
       more.className = 'library-more';
-      more.textContent = `Show all ${rows.length} recordings`;
+      more.textContent = tr('library.showAll', { count: rows.length });
       more.addEventListener('click', () => { libraryShowAll = true; renderLibrary(); });
       el.libraryList.append(more);
     }
@@ -1813,15 +1860,15 @@ async function renderLibrary() {
 
   const res = await window.bsr.searchLibrary(query);
   if (stamp !== librarySearchAt) return;
-  if (!res || !res.ok) { showNotice((res && res.error) || 'Could not search.'); return; }
+  if (!res || !res.ok) { showNotice(() => (res && res.error) || tr('error.search')); return; }
 
   const results = res.results || [];
   // The heading was still saying "Recent recordings" over a list of search
   // results, which is a small lie the eye notices before the mind does.
-  el.libraryHeading.textContent = 'Recordings matching your search';
+  el.libraryHeading.textContent = tr('library.searchHeading');
   el.libraryFound.textContent = results.length
-    ? `${results.length} recording${results.length === 1 ? '' : 's'}`
-    : 'nothing found';
+    ? tr('count.recordings', { count: results.length })
+    : tr('library.notFound');
   el.libraryEmpty.hidden = true;
   el.libraryList.replaceChildren();
   for (const r of results) el.libraryList.append(libraryRow(r, query));
@@ -1919,7 +1966,7 @@ function clearDropHints() {
  */
 async function addNoteBelow(afterId = selectedId) {
   const r = await window.bsr.addNote('', afterId);
-  if (!r) { showNotice('Open or start a recording first.'); return; }
+  if (!r) { showNotice(() => tr('error.openOrStart')); return; }
 
   steps.splice(r.index, 0, r.step);
   renderList();
@@ -1936,7 +1983,7 @@ async function addPhotos(files) {
   const r = await window.bsr.addPhotos(files || null, selectedId);
   if (!r || r.ok === false) {
     if (r && r.cancelled) return;
-    showNotice((r && r.error) || 'Could not add the photos.');
+    showNotice(() => (r && r.error) || tr('error.photos'));
     return;
   }
 
@@ -1948,7 +1995,7 @@ async function addPhotos(files) {
     await select(r.added[r.added.length - 1].step.id);
     el.text.focus();
   }
-  if (r.failed.length) showNotice(r.failed.join(' '));
+  if (r.failed.length) showNotice(() => r.failed.join(' '));
 }
 
 // Not disabled on an empty recording, unlike + Note: a recording that is all
@@ -2014,7 +2061,7 @@ function phaseName(app) {
 
 async function addSection(text, afterId) {
   const r = await window.bsr.addSection(text, afterId);
-  if (!r) { showNotice('Open or start a recording first.'); return null; }
+  if (!r) { showNotice(() => tr('error.openOrStart')); return null; }
 
   steps.splice(r.index, 0, r.step);
   renderList();
@@ -2030,11 +2077,11 @@ async function addSection(text, afterId) {
 /** What + Add offers, and what a step's own menu offers below itself. */
 function addMenuItems(afterId = selectedId) {
   return [
-    { label: 'Note \u2014 an instruction that was not a click',
+    { label: tr('add.note'),
       run: () => addNoteBelow(afterId) },
-    { label: 'Section heading \u2014 to group the steps below it',
+    { label: tr('add.section'),
       run: () => addSection('', afterId) },
-    { label: 'Photographs from a camera\u2026',
+    { label: tr('add.photos'),
       run: () => addPhotos(null) },
   ];
 }
@@ -2055,12 +2102,12 @@ function suggestionRow(hint, index) {
 
   const why = document.createElement('span');
   why.className = 'why';
-  why.textContent = `Moves to ${phaseName(hint.app)} here`;
+  why.textContent = tr('section.suggestion', { app: phaseName(hint.app) });
 
   const add = document.createElement('button');
   add.className = 'tiny';
-  add.textContent = '+ Section';
-  add.title = 'Add a heading above this step';
+  add.textContent = tr('section.add');
+  add.title = tr('section.addAbove');
   add.addEventListener('click', (e) => {
     e.stopPropagation();
     // Anchored to the row before, because insertion is "after" - which puts the
@@ -2076,7 +2123,7 @@ function suggestionRow(hint, index) {
   const no = document.createElement('button');
   no.className = 'no';
   no.textContent = '\u00d7';
-  no.title = 'Not a phase boundary';
+  no.title = tr('section.notBoundary');
   no.addEventListener('click', async (e) => {
     e.stopPropagation();
     const step = steps.find((x) => x.id === hint.id);
@@ -2106,7 +2153,7 @@ async function stepHistory(direction) {
   if (!r.ok) {
     // The strip, not a dialog: an undo that cannot be applied is worth saying
     // and not worth a click to dismiss.
-    showNotice(r.error || `Nothing to ${direction}.`);
+    showNotice(() => r.error || tr(direction === 'undo' ? 'history.nothingUndo' : 'history.nothingRedo'));
     return;
   }
   steps = r.steps;
@@ -2134,7 +2181,7 @@ async function commitMarker(id, at, angle) {
   const r = await window.bsr.moveMarker(id, at, angle);
 
   if (!r || !r.ok) {
-    showNotice((r && r.error) || 'Could not move the marker.');
+    showNotice(() => (r && r.error) || tr('error.moveMarker'));
     if (step) placeIndicator(step);        // undo the live preview
     return;
   }
@@ -2152,7 +2199,7 @@ async function hideMarker(id, hidden) {
   const step = steps.find((s) => s.id === id);
   const r = await window.bsr.hideMarker(id, hidden);
   if (!r || !r.ok) {
-    showNotice((r && r.error) || 'Could not change the marker.');
+    showNotice(() => (r && r.error) || tr('error.changeMarker'));
     return;
   }
   if (step) {
@@ -2209,7 +2256,7 @@ window.addEventListener('mouseup', async () => {
   const step = steps.find((s) => s.id === turn.id);
   const r = await window.bsr.turnMarker(turn.id, turn.angle);
   if (!r || !r.ok) {
-    showNotice((r && r.error) || 'Could not turn the marker.');
+    showNotice(() => (r && r.error) || tr('error.turnMarker'));
     if (step) placeIndicator(step);
     return;
   }
@@ -2414,9 +2461,9 @@ function showContext(x, y, items) {
 
 /** The two that belong on every menu, because they always apply. */
 const historyItems = () => [
-  { label: 'Undo', key: 'Ctrl+Z', enabled: historyDepth.undo > 0,
+  { label: tr('history.undo'), key: 'Ctrl+Z', enabled: historyDepth.undo > 0,
     run: () => undoOnce() },
-  { label: 'Redo', key: 'Ctrl+Y', enabled: historyDepth.redo > 0,
+  { label: tr('history.redo'), key: 'Ctrl+Y', enabled: historyDepth.redo > 0,
     run: () => redoOnce() },
 ];
 
@@ -2442,17 +2489,17 @@ el.list.addEventListener('contextmenu', (e) => {
   showContext(e.clientX, e.clientY, [
     ...historyItems(),
     null,
-    ...addMenuItems(id).map((item) => ({ ...item, label: `Add: ${item.label}` })),
+    ...addMenuItems(id).map((item) => ({ ...item, label: tr('add.prefix', { label: item.label }) })),
     null,
-    { label: 'Re-record this step',
+    { label: tr('step.rerecord'),
       // Re-recording captures a window again, so it needs one: that rules out
       // headings, notes and photographs without naming any of them.
       enabled: BsrSections.isStep(step) && Boolean(step.window),
       run: () => { select(id); rerecordSelected(); } },
     null,
-    { label: step.excluded ? 'Include in the guide' : 'Leave out of the guide',
+    { label: step.excluded ? tr('step.include') : tr('step.exclude'),
       run: () => setExcluded([...marked], !step.excluded) },
-    { label: many ? `Delete ${marked.size} steps` : 'Delete step', key: deleteKeyLabel(),
+    { label: many ? tr('step.deleteMany', { count: marked.size }) : tr('step.delete'), key: deleteKeyLabel(),
       run: () => deleteSelection() },
   ]);
 });
@@ -2504,9 +2551,9 @@ el.wrap.addEventListener('contextmenu', (e) => {
   const hitMark = at && step && step.marks
     ? BsrAnnotate.markAt(step.marks, at.x, at.y)
     : null;
-  const NAMES = { box: 'box', ellipse: 'ring', arrow: 'arrow',
-                  highlight: 'highlight', text: 'label' };
-  const hitName = hitMark ? (NAMES[hitMark.tool] || 'mark') : '';
+  const NAMES = { box: 'mark.nameBox', ellipse: 'mark.nameRing', arrow: 'mark.nameArrow',
+                  highlight: 'mark.nameHighlight', text: 'mark.nameLabel' };
+  const hitName = hitMark ? tr(NAMES[hitMark.tool] || 'mark.nameDefault') : '';
 
   const withoutHit = () => (step.marks || []).filter((m) => m.id !== hitMark.id);
   const recoloured = (id) => (step.marks || [])
@@ -2532,25 +2579,25 @@ el.wrap.addEventListener('contextmenu', (e) => {
     null,
     ...(hitMark ? [
       ...(hitMark.tool === 'text'
-        ? [{ label: BsrAnnotate.isTextBox(hitMark) ? 'Edit this text' : 'Edit this label',
+        ? [{ label: BsrAnnotate.isTextBox(hitMark) ? tr('mark.editText') : tr('mark.editLabel'),
              run: () => openLabel(0, 0, hitMark) }]
         : []),
       // One item instead of four. Four colours, a delete and four things about
       // the click marker made an eleven-line menu in which the two arrows -
       // the drawn one and the recorded one - were five lines apart and read
       // identically.
-      { label: 'Change colour',
+      { label: tr('mark.changeColour'),
         items: palette().map((c) => ({
-          label: c.name,
+          label: colourName(c),
           swatch: c.value,
           chosen: c.id === hitMark.colour,
           run: () => commitMarks(step, recoloured(c.id)),
         })) },
-      { label: `Delete this ${hitName}`, key: 'Del',
+      { label: tr('mark.delete', { name: hitName }), key: 'Del',
         run: () => commitMarks(step, withoutHit()) },
       null,
     ] : []),
-    { label: moved || !at ? 'Move the marker here' : 'Put a marker here',
+    { label: moved || !at ? tr('marker.moveHere') : tr('marker.putHere'),
       enabled: Boolean(step) && Boolean(at),
       run: () => {
         // Placing one on a step whose marker is hidden would put it somewhere
@@ -2562,12 +2609,12 @@ el.wrap.addEventListener('contextmenu', (e) => {
     // These are the three that are used once in a recording if at all, and
     // they were taking three of the eleven lines somebody read every time they
     // right-clicked to delete a box.
-    { label: 'The click marker', items: [
-      { label: hidden ? 'Show the marker on this step'
-                      : 'Hide the marker on this step',
+    { label: tr('marker.menu'), items: [
+      { label: hidden ? tr('marker.show')
+                      : tr('marker.hide'),
         enabled: Boolean(step),
         run: () => hideMarker(step.id, !hidden) },
-      { label: 'Point the arrow the way it chooses',
+      { label: tr('marker.autoAngle'),
         enabled: Boolean(step) && Number.isFinite(step.markerAngle),
         run: () => window.bsr.turnMarker(step.id, null).then((r) => {
           if (r && r.ok) {
@@ -2576,7 +2623,7 @@ el.wrap.addEventListener('contextmenu', (e) => {
             placeIndicator(step);
           }
         }) },
-      { label: 'Put the marker back where it was recorded',
+      { label: tr('marker.resetPosition'),
         enabled: moved,
         run: () => commitMarker(step.id, null) },
     ] },
@@ -2616,8 +2663,8 @@ function paintFindCount() {
   const rows = hits.length;
   const total = hits.reduce((n, h) => n + h.count, 0);
   el.findCount.textContent = rows
-    ? `${total} in ${rows} step${rows === 1 ? '' : 's'}`
-    : 'none';
+    ? tr('find.matches', { total, count: rows })
+    : tr('find.none');
   el.findGo.disabled = rows === 0;
 }
 
@@ -2646,7 +2693,7 @@ el.findGo.addEventListener('click', async () => {
   if (!q) return;
 
   const r = await window.bsr.replaceAll(q, el.findReplacement.value, findOptions());
-  if (!r || !r.ok) { showNotice((r && r.error) || 'Could not replace.'); return; }
+  if (!r || !r.ok) { showNotice(() => (r && r.error) || tr('error.replace')); return; }
 
   if (r.steps) steps = r.steps;
   renderList();
@@ -2655,7 +2702,7 @@ el.findGo.addEventListener('click', async () => {
   paintFindCount();
   // Only when there is something to say: an empty strip is a notice that the
   // user has to dismiss and learns nothing from.
-  if (r.message) showNotice(r.message);
+  if (r.message) showNotice(() => r.message);
 });
 
 // ---- exclude from export ------------------------------------------------------
@@ -2695,17 +2742,22 @@ function renderScopeList(windows) {
     const p = document.createElement('div');
     p.className = 'p';
     p.textContent = sub;
+    if (!value) {
+      t.dataset.i18n = 'renderer.scope.everything';
+      p.dataset.i18n = 'renderer.scope.everyApp';
+    }
     box.append(t, p);
     label.append(input, box);
     el.scopeList.append(label);
   };
 
-  row('', 'Everything', 'Every application on screen', scopeChoice.pids.length === 0);
+  row('', tr('scope.everything'), tr('scope.everyApp'), scopeChoice.pids.length === 0);
 
   if (!windows.length) {
     const empty = document.createElement('div');
     empty.className = 'scope-empty';
-    empty.textContent = 'No other windows found.';
+    empty.textContent = tr('scope.noWindows');
+    empty.dataset.i18n = 'renderer.scope.noWindows';
     el.scopeList.append(empty);
     return;
   }
@@ -2726,7 +2778,8 @@ async function openScope() {
   el.scopeList.replaceChildren();
   const loading = document.createElement('div');
   loading.className = 'scope-empty';
-  loading.textContent = 'Looking for open windows…';
+  loading.textContent = tr('scope.loading');
+  loading.dataset.i18n = 'renderer.scope.loading';
   el.scopeList.append(loading);
   el.scopeDlg.showModal();
 
@@ -2750,7 +2803,7 @@ el.scopeGo.addEventListener('click', async () => {
   }
 
   await window.bsr.setScope(scopeChoice.pids, scopeChoice.label);
-  el.scopeBtn.textContent = `Capture: ${scopeChoice.label}`;
+  el.scopeBtn.textContent = tr('scope.capture', { scope: scopeLabel(scopeChoice.label) });
   el.scopeDlg.close();
 });
 
@@ -2784,15 +2837,13 @@ window.bsr.onHotkey(({ action, session, error }) => {
   else if (action === 'stopped') recordingFinished();
   else if (action === 'started' && session) {
     recordingBegan(session);
-    showNotice(`Recording ${session.scope}. Press the same key to pause, `
-             + 'and the stop key to finish.');
+    showNotice(() => tr('recording.started', { scope: scopeLabel(session.scope) }));
   } else if (action === 'idle') {
     // The report that started this: a hotkey that does nothing is
     // indistinguishable from a hotkey that is not working.
-    showNotice('Nothing is being recorded. Press the pause key, or Start '
-             + 'recording, to begin one.');
+    showNotice(() => tr('recording.hotkeyIdle'));
   } else if (action === 'failed') {
-    showNotice(error || 'Could not start recording.');
+    showNotice(() => error || tr('error.start'));
   }
 });
 
@@ -2910,8 +2961,8 @@ let dragStart = null;
 // may not exist. It is also the only way to move a label after placing it: the
 // alternative was deleting it and typing it again.
 
-const MARK_NAMES = { box: 'Box', ellipse: 'Circle', arrow: 'Arrow',
-                     highlight: 'Highlight', text: 'Label' };
+const MARK_NAMES = { box: 'mark.box', ellipse: 'mark.circle', arrow: 'mark.arrow',
+                     highlight: 'mark.highlight', text: 'mark.label' };
 
 let selectedMarkId = null;
 let markMove = null;
@@ -2930,8 +2981,7 @@ function paintMarkBar() {
     return;
   }
 
-  el.markKind.textContent = BsrAnnotate.isTextBox(mark) ? 'Text box'
-    : (MARK_NAMES[mark.tool] || 'Mark');
+  paintMarkLabels(mark);
 
   // A highlight keeps the highlighter's own colours: they mean something in
   // the key at the front of the guide, and offering the shape palette here
@@ -2944,7 +2994,8 @@ function paintMarkBar() {
   for (const colour of palette) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.title = colour.name;
+    b.title = colourName(colour);
+    b.dataset.i18nTitle = `renderer.colour.${colour.id}`;
     b.style.background = colour.value;
     if (colour.id === mark.colour) b.className = 'chosen';
     b.addEventListener('click', () => changeMark(mark.id, { colour: colour.id }));
@@ -2971,14 +3022,6 @@ function paintMarkBar() {
   const canPick = typeof window.EyeDropper === 'function';
   el.markColourPick.hidden = !canPick;
   el.markCardPick.hidden = !canPick;
-
-  // What can be done to THIS mark. "Drag it to move it", over an arrow with a
-  // handle on each end, describes the one thing the strip used to be able to
-  // say rather than what is on the screen.
-  const HINTS = { arrow: 'Drag an end to aim it - Shift snaps the angle',
-                  text: 'Drag it to move it - double-click to edit' };
-  el.markHint.textContent = box ? 'Drag a corner to resize - double-click to edit'
-    : (HINTS[mark.tool] || 'Drag a corner to resize it');
 
   el.markBar.hidden = false;
 
@@ -3007,6 +3050,15 @@ function paintMarkBar() {
     const wholeHeight = box.bottom - box.top > shot.height - bar.height * 2 - 24;
     el.markBar.classList.toggle('low', over && !wholeHeight);
   }
+}
+
+/** Translate the selected mark without resetting an open colour/card editor. */
+function paintMarkLabels(mark) {
+  el.markKind.textContent = BsrAnnotate.isTextBox(mark) ? tr('mark.textBox')
+    : (MARK_NAMES[mark.tool] ? tr(MARK_NAMES[mark.tool]) : tr('mark.default'));
+  const hints = { arrow: 'mark.hintArrow', text: 'mark.hintText' };
+  el.markHint.textContent = BsrAnnotate.isTextBox(mark) ? tr('mark.hintTextBox')
+    : tr(hints[mark.tool] || 'mark.hintResize');
 }
 
 function selectMark(id) {
@@ -3376,7 +3428,8 @@ function openLabel(clientX, clientY, editing = null, drawn = null) {
     box.style.fontSize = `${Math.max(9, font)}px`;
     box.style.padding = `${Math.round(font * 0.4)}px`;
     box.style.background = `rgba(${rgb}, ${Math.max(card.opacity, 0.35)})`;
-    box.setAttribute('aria-label', 'Text box');
+    box.setAttribute('aria-label', tr('mark.textBox'));
+    box.dataset.i18nAriaLabel = 'renderer.mark.textBox';
   } else {
     // Roughly the size it will end up, so what is typed looks like what appears.
     const scale = el.shot.naturalWidth ? shot.width / el.shot.naturalWidth : 1;
@@ -3392,7 +3445,8 @@ function openLabel(clientX, clientY, editing = null, drawn = null) {
     box.style.fontSize = `${Math.max(11, Math.round(size))}px`;
     box.style.padding = '';
     box.style.background = '';
-    box.setAttribute('aria-label', 'Label text');
+    box.setAttribute('aria-label', tr('mark.labelText'));
+    box.dataset.i18nAriaLabel = 'renderer.mark.labelText';
   }
   box.style.height = '';
   box.hidden = false;
@@ -3492,7 +3546,7 @@ for (const name of ['box', 'ellipse', 'arrow', 'text']) {
       swatch.style.background = colour.value;
 
       const label = document.createElement('span');
-      label.textContent = colour.name;
+      label.textContent = colourName(colour);
 
       b.append(swatch, label);
       b.addEventListener('click', async () => {
@@ -3525,7 +3579,7 @@ el.highlight.addEventListener('contextmenu', (e) => {
     swatch.style.background = hue.fill;
 
     const label = document.createElement('span');
-    label.textContent = hue.name;
+    label.textContent = colourName(hue);
 
     b.append(swatch, label);
     b.addEventListener('click', async () => {
@@ -3657,7 +3711,7 @@ async function applyCrop(sel, displayedWidth) {
   if (!step) return;
 
   const dataUrl = await window.bsr.shotData(step.screenshot);
-  if (!dataUrl) { showNotice('Could not read the screenshot.'); return; }
+  if (!dataUrl) { showNotice(() => tr('error.screenshot')); return; }
 
   const img = new Image();
   await new Promise((resolve, reject) => {
@@ -3683,8 +3737,7 @@ async function applyCrop(sel, displayedWidth) {
   // The marker the step actually shows, which is the dragged one where there
   // is one. Asking about the recorded click would warn about the wrong thing.
   if (BsrCrop.losesAnyMarker(step, rect, image)) {
-    const ok = confirm('The marker on this step is outside that region, so the '
-      + 'step will have no marker on it. Crop anyway?');
+    const ok = confirm(tr('crop.confirm'));
     if (!ok) return;
   }
 
@@ -3696,7 +3749,7 @@ async function applyCrop(sel, displayedWidth) {
 
   const r = await window.bsr.cropStep(step.id, canvas.toDataURL('image/png'),
                                       rect, image);
-  if (!r || !r.ok) { showNotice((r && r.error) || 'Could not crop that step.'); return; }
+  if (!r || !r.ok) { showNotice(() => (r && r.error) || tr('error.crop')); return; }
 
   steps[steps.indexOf(step)] = r.step;
   armTool('crop');       // one crop at a time, so the next drag is deliberate
@@ -3726,7 +3779,7 @@ function markFromDrag(tool, { sel, from, to }, displayedWidth, displayedHeight) 
 async function commitMarks(step, marks) {
   const r = await window.bsr.setMarks(step.id, marks);
   if (!r || !r.ok) {
-    showNotice((r && r.error) || 'Could not change the marks.');
+    showNotice(() => (r && r.error) || tr('error.marks'));
     placeMarks(step);
     return false;
   }
@@ -3762,7 +3815,7 @@ async function applyPixels(tool, { sel, from, to }, displayedWidth) {
   if (!step) return;
 
   const dataUrl = await window.bsr.shotData(step.screenshot);
-  if (!dataUrl) { showNotice('Could not read the screenshot.'); return; }
+  if (!dataUrl) { showNotice(() => tr('error.screenshot')); return; }
 
   const img = new Image();
   await new Promise((resolve, reject) => {
@@ -3814,10 +3867,10 @@ async function applyPixels(tool, { sel, from, to }, displayedWidth) {
     r = await window.bsr.redactStep(step.id, out, tool,
                                     tool === 'highlight' ? highlightId : '');
   } catch (err) {
-    showNotice(`Could not mark that area: ${err.message}`);
+    showNotice(() => tr('error.markArea', { error: err.message }));
     return;
   }
-  if (!r.ok) { showNotice(r.error); return; }
+  if (!r.ok) { showNotice(() => r.error); return; }
 
   steps[steps.indexOf(step)] = r.step;
   select(step.id);
@@ -3825,24 +3878,26 @@ async function applyPixels(tool, { sel, from, to }, displayedWidth) {
 
 // ---- export -------------------------------------------------------------------
 
+let exportPurpose = null;
+function paintExportNote() {
+  if (exportPurpose === null) return;
+  el.expNote.textContent = exportPurpose === 'evidence'
+    ? tr('export.evidenceNote') : tr('export.instructionsNote');
+}
+
 /** Opens the export dialog. A function, so the finished bar calls it directly. */
 async function openExport() {
   if (!steps.length) {
-    showNotice('There is nothing to export yet. Open a recording, or make one, first.');
+    showNotice(() => tr('export.nothing'));
     return;
   }
-  if (!el.expTitle.value) el.expTitle.value = el.sessionName.value || 'Recorded steps';
+  if (!el.expTitle.value) el.expTitle.value = el.sessionName.value || tr('export.defaultTitle');
 
   // Say what will happen to THIS recording, not what usually happens: an
   // evidence record is deliberately not rewritten into instructions.
   const s = await window.bsr.getSession();
-  el.expNote.textContent = s.purpose === 'evidence'
-    ? 'This is an evidence record, so wording stays in the past tense — "Clicked '
-      + 'the Save button", describing what was done. Wording you edited yourself '
-      + 'is left exactly as written.'
-    : 'Descriptions are rewritten as instructions ("Click Save" rather than '
-      + '"Clicked the Save button"). Wording you edited yourself is left exactly '
-      + 'as written.';
+  exportPurpose = s.purpose;
+  paintExportNote();
 
   el.exportDlg.showModal();
 }
@@ -3855,7 +3910,7 @@ el.expGo.addEventListener('click', async () => {
   el.exportDlg.close();
   // A large recording spends several seconds re-encoding screenshots before the
   // save dialog appears. Without this the window simply looks frozen.
-  el.saveState.textContent = 'Exporting…';
+  showSaveMessage(() => tr('export.exporting'));
   // One at a time: a second click during a slow export started a second one.
   el.exportBtn.disabled = true;
   el.finishedExport.disabled = true;
@@ -3866,15 +3921,15 @@ el.expGo.addEventListener('click', async () => {
     el.exportBtn.disabled = false;
     el.finishedExport.disabled = false;
   }
-  if (!r || r.cancelled) { el.saveState.textContent = ''; return; }
+  if (!r || r.cancelled) { showSaveMessage(() => ''); return; }
   if (!r.ok) {
     // Cleared: "Exporting…" used to stay in the footer after the export failed,
     // behind a blocking box carrying the operating system's own error text.
-    el.saveState.textContent = '';
-    showNotice(r.error || 'The guide could not be exported.');
+    showSaveMessage(() => '');
+    showNotice(() => r.error || tr('error.export'));
     return;
   }
-  el.saveState.textContent = `Exported to ${r.file}`;
+  showSaveMessage(() => tr('export.path', { file: r.file }));
   // Where it went, and the two things anyone does next with a file they just
   // made. The footer's path was plain text, and its Show in Explorer opened the
   // recording's folder rather than the export's. No Settings link: most export
@@ -3882,10 +3937,10 @@ el.expGo.addEventListener('click', async () => {
   // Settings, and a link beside them sent people looking for a setting that is
   // not there.
   const name = String(r.file).split(/[\\/]/).pop();
-  showNotice(r.warning ? `Exported ${name}. ${r.warning}` : `Exported ${name}.`, {
+  showNotice(() => r.warning ? tr('export.warning', { name, warning: r.warning }) : tr('export.success', { name }), {
     actions: [
-      { label: 'Open', run: () => window.bsr.showExport('open') },
-      { label: 'Show in folder', run: () => window.bsr.showExport('folder') },
+      { label: () => tr('export.open'), run: () => window.bsr.showExport('open') },
+      { label: () => tr('export.showFolder'), run: () => window.bsr.showExport('folder') },
     ],
   });
 });
@@ -3893,6 +3948,7 @@ el.expGo.addEventListener('click', async () => {
 // ---- settings ----------------------------------------------------------------
 
 function paintSettings(v) {
+  el.language.value = BsrI18n.resolveLocale(v.language);
   el.root.value = v.saveRoot;
   el.keyboard.checked = v.recordKeyboard !== false;
   el.brand.value = v.brandName || '';
@@ -3957,14 +4013,14 @@ async function paintTemplates(chosenPath) {
     for (const t of templates) {
       const o = document.createElement('option');
       o.value = t.path;
-      o.textContent = t.origin === 'builtin' ? `${t.name} — ships with the app` : t.name;
+      o.textContent = t.origin === 'builtin' ? tr('template.builtin', { name: t.name }) : t.name;
       el.templateList.append(o);
     }
     // A file chosen with the browser may sit outside both folders.
     if (chosenPath && !templates.some((t) => t.path === chosenPath)) {
       const o = document.createElement('option');
       o.value = chosenPath;
-      o.textContent = `${baseName(chosenPath)} — your own file`;
+      o.textContent = tr('template.ownFile', { name: baseName(chosenPath) });
       el.templateList.append(o);
     }
     el.templateList.value = effective.path || '';
@@ -3973,10 +4029,10 @@ async function paintTemplates(chosenPath) {
   const name = baseName(effective.path);
   const mine = effective.chosen;
   el.optTemplate.textContent = !name
-    ? 'Word, or your own template — none available'
+    ? tr('template.noneAvailable')
     : /\.docx$/i.test(name)
-      ? `Word (.docx) — into ${mine ? 'your template' : 'the built-in SOP template'}: ${name}`
-      : `${mine ? 'Your own template' : 'The built-in template'} — ${name}`;
+      ? tr(mine ? 'template.wordOwn' : 'template.wordBuiltin', { name })
+      : tr(mine ? 'template.own' : 'template.stock', { name });
 }
 
 /**
@@ -4001,14 +4057,16 @@ function paintLegendMeanings(values) {
     swatch.style.background = hue.fill;
 
     const label = document.createElement('label');
-    label.textContent = hue.name;
+    label.textContent = colourName(hue);
+    label.dataset.i18n = `renderer.colour.${hue.id}`;
     label.htmlFor = `mean-${hue.id}`;
 
     const input = document.createElement('input');
     input.type = 'text';
     input.id = `mean-${hue.id}`;
     input.value = meanings[hue.id] || '';
-    input.placeholder = 'what this colour means';
+    input.placeholder = tr('legend.placeholder');
+    input.dataset.i18nPlaceholder = 'renderer.legend.placeholder';
     input.addEventListener('change', async () => {
       const next = { ...(values.highlightMeanings || {}), [hue.id]: input.value.trim() };
       await window.bsr.setSettings({ highlightMeanings: next });
@@ -4035,16 +4093,16 @@ async function paintBuild() {
   // cannot be out of step, so there is nothing to say about it - and when there
   // IS, it is said below rather than left for the reader to work out by
   // comparing two timestamps.
-  el.build.textContent = `Build ${b.build} · ${b.version} · ${b.commit}`;
+  el.build.textContent = tr('build.label', { build: b.build, version: b.version, commit: b.commit });
 
-  if (b.source !== 'packaged') el.build.append(' · development');
+  if (b.source !== 'packaged') el.build.append(tr('build.development'));
 
   if (b.engineStale) {
     const warn = document.createElement('span');
     warn.className = 'stale';
     // Says what to do, not what was compared. The check is the engine against
     // its own source, so the app being newer is not the point.
-    warn.textContent = ' — capture engine needs rebuilding';
+    warn.textContent = tr('build.engineStale');
     el.build.append(warn);
   }
 }
@@ -4143,31 +4201,35 @@ el.logoPick.addEventListener('click', async () => {
 
 el.templatePick.addEventListener('click', async () => {
   const r = await window.bsr.chooseTemplate();
-  if (!r.ok) { if (r.error) showNotice(r.error); return; }
+  if (!r.ok) { if (r.error) showNotice(() => r.error); return; }
   paintSettings(r.values);
 
   // Say what the template declares, so a typo in a hook name is visible now
   // rather than as a gap in a finished document.
-  const i = r.inspection || {};
-  const bits = [`${(i.hooks || []).length} hooks`];
-  if ((i.loops || []).length) bits.push(`${i.loops.length} repeating block(s)`);
-  if ((i.unpaired || []).length) bits.push(`unpaired: ${i.unpaired.join(', ')}`);
-  el.templateInfo.textContent = bits.join(' · ');
+  templateInspection = r.inspection || {};
+  paintTemplateInspection();
 });
+
+let templateInspection = null;
+function paintTemplateInspection() {
+  if (!templateInspection) return;
+  const i = templateInspection;
+  const bits = [tr('template.hooks', { count: (i.hooks || []).length })];
+  if ((i.loops || []).length) bits.push(tr('template.loops', { count: i.loops.length }));
+  if ((i.unpaired || []).length) bits.push(tr('template.unpaired', { names: i.unpaired.join(', ') }));
+  el.templateInfo.textContent = bits.join(' · ');
+}
 
 // Taking a stock template and making it yours, in one step: the app copies it
 // somewhere you own, starts using it, and opens it so you can start editing.
 el.templateCopy.addEventListener('click', async () => {
   const r = await window.bsr.duplicateTemplate(el.templateList.value);
-  if (!r.ok) { showNotice(r.error); return; }
+  if (!r.ok) { showNotice(() => r.error); return; }
 
   paintSettings(r.values);
-  showNotice(r.opened
-    ? `Copied to your templates folder and opened for editing. It is now the `
-      + `template exports use. Keep the {{…}} markers — that is where the `
-      + `recording goes.`
-    : `Copied to ${r.path}, and it is now the template exports use. Open it `
-      + `yourself to edit — this machine had nothing registered to open it.`);
+  showNotice(() => r.opened
+    ? tr('template.copiedOpened')
+    : tr('template.copied', { path: r.path }));
 });
 
 el.templateFolder.addEventListener('click', () => window.bsr.revealTemplates());
@@ -4194,12 +4256,76 @@ el.scale.addEventListener('change', async () => {
   await window.bsr.setSettings({ imageScale: Number(el.scale.value) / 100 });
 });
 
-setState('idle');
-renderList();
-window.bsr.getSettings().then(paintSettings);
-refreshShortcuts();
-renderLibrary();
-window.bsr.getScope().then((s) => {
-  scopeChoice = s;
-  el.scopeBtn.textContent = `Capture: ${s.label}`;
+/** Repaint presentation only: all fields, selections and pending edits survive. */
+function applyLanguage(language) {
+  BsrI18n.setLocale(language);
+  BsrI18n.translatePage(document);
+  el.language.value = BsrI18n.getLocale();
+  el.cState.textContent = state === 'paused' ? tr('state.paused') : tr('state.recording');
+  el.cPause.textContent = state === 'paused' ? tr('state.resume') : tr('state.pause');
+  el.scopeBtn.textContent = tr('scope.capture', {
+    scope: scopeLabel(state !== 'idle' && recordingScope ? recordingScope : scopeChoice.label),
+  });
+  renderList();
+  paintFindCount();
+  const step = steps.find((item) => item.id === selectedId);
+  if (step) paintStepLabels(step);
+  const mark = selectedMark();
+  if (mark) paintMarkLabels(mark);
+  paintBlocked(blockedState, { notice: false });
+  if (!el.finished.hidden) showFinished();
+  if (!el.notice.hidden) paintNotice();
+  if (repaintSaveState) repaintSaveState();
+  paintExportNote();
+  paintTemplateInspection();
+  for (const option of el.suScope.options) {
+    if (option.value) option.textContent = tr('scope.only', {
+      process: option.dataset.process, title: option.dataset.windowTitle,
+    });
+  }
+  // A context menu is rebuilt in the new language the next time it is opened.
+  closeContext();
+  el.hueMenu.hidden = true;
+  if (listeningFor) {
+    listeningFor.btn.textContent = tr('shortcut.pressKeys');
+    listeningFor.row.querySelector('.k-keys').textContent = tr('shortcut.combination');
+  } else {
+    refreshShortcuts();
+  }
+  paintTemplates(el.template.value);
+  paintBuild();
+  renderLibrary();
+}
+
+let languageChange = 0;
+el.language.addEventListener('change', async () => {
+  const revision = ++languageChange;
+  const values = await window.bsr.setSettings({ language: el.language.value });
+  if (revision === languageChange) applyLanguage(values.language);
 });
+
+// Language is loaded before the initial UI is painted, so a saved preference
+// is used by the first status, library query and settings controls.
+async function initialize() {
+  el.language.replaceChildren();
+  for (const locale of BsrI18n.locales) {
+    const option = document.createElement('option');
+    option.value = locale.code;
+    option.textContent = locale.name;
+    el.language.append(option);
+  }
+  const values = await window.bsr.getSettings();
+  BsrI18n.setLocale(values.language);
+  BsrI18n.translatePage(document);
+  paintSettings(values);
+  paintDeleteKey(values);
+  setState('idle');
+  renderList();
+  refreshShortcuts();
+  renderLibrary();
+  const scope = await window.bsr.getScope();
+  scopeChoice = scope;
+  el.scopeBtn.textContent = tr('scope.capture', { scope: scopeLabel(scope.label) });
+}
+
+initialize();

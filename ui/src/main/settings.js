@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const { resolveLocale } = require('../shared/i18n');
 
 /**
  * `documentsDir` is passed in rather than derived from the home directory.
@@ -19,6 +20,7 @@ function defaults(documentsDir) {
 }
 
 const DEFAULTS = {
+  language: 'en',     // interface language; recorded and authored text is kept
   saveRoot: path.join(os.homedir(), 'Documents', 'StepRecordings'),
   imageFormat: 'png',   // png | jpeg
   imageQuality: 85,     // jpeg only
@@ -93,6 +95,7 @@ class Settings {
 
   #clamp() {
     const v = this.values;
+    v.language = resolveLocale(v.language);
     v.imageFormat = v.imageFormat === 'jpeg' ? 'jpeg' : 'png';
     v.imageQuality = Math.min(100, Math.max(1, Number(v.imageQuality) || 85));
     v.imageScale = Math.min(1, Math.max(0.25, Number(v.imageScale) || 1));

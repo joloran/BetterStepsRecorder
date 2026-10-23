@@ -212,7 +212,7 @@ console.log('\nnothing is recorded that the person did not ask for:');
 
   // Two recordings at once share one engine, one clock and one folder.
   check('a second recording cannot start on top of a first',
-        /if \(recordingSince\) \{[\s\S]{0,160}already being recorded/.test(body));
+        /if \(recordingSince\) \{[\s\S]{0,160}main\.recording\.alreadyRunning/.test(body));
   check('and pausing is refused when nothing is recording',
         /'recording:pause'[\s\S]{0,400}if \(!recordingSince\) return \{ ok: false/.test(main));
   check('as it is in the window', /if \(state === 'idle'\) return;/.test(renderer));
@@ -614,7 +614,7 @@ console.log('\nno routine outcome stops the window:');
         /if \(r && r\.ok && r\.file\) lastExported = r\.file;/.test(main)
         && /ipcMain\.handle\('export:show'[\s\S]{0,500}lastExported/.test(main));
   check('a failed export is described in plain words',
-        (main.match(/messages\.fileProblem\(err, \{ action: 'export the guide' \}\)/g) || []).length === 2);
+        (main.match(/fileProblem\(err, 'export the guide'\)/g) || []).length === 2);
   check('Cancel on Re-record reaches the wait in main',
         /window\.bsr\.cancelRerecord\(\)/.test(renderer)
         && /cancelRerecord = \(\) => \{ sidecar\.pause\(\); finish\('cancelled'\); \}/.test(main));
@@ -628,7 +628,7 @@ console.log('\nevery way in behaves the same:');
         /async function openFromDisk\(\) \{[\s\S]{0,600}await showOpened\(r\);/.test(renderer));
   check('more than twelve recordings can be reached without searching',
         /libraryShowAll \? rows : rows\.slice\(0, LIBRARY_RECENT\)/.test(renderer)
-        && /Show all \$\{rows\.length\} recordings/.test(renderer));
+        && /tr\('library\.showAll', \{ count: rows\.length \}\)/.test(renderer));
   check('Discard only ever empties a recording with no steps, from the recordings folder, to the Recycle Bin',
         /ipcMain\.handle\('session:discard'[\s\S]{0,400}if \(session\.steps\.length\)/.test(main)
         && /path\.dirname\(path\.resolve\(dir\)\)\.toLowerCase\(\) === path\.resolve\(root\)\.toLowerCase\(\)/.test(main)
@@ -660,14 +660,14 @@ console.log('\nthe step list uses the wording rules, not the raw fields:');
   const at = renderer.indexOf('function renderList()');
   const body = renderer.slice(at, renderer.indexOf('\n}\n', at));
   check('a row title comes from rowTitle', /BsrAppName\.rowTitle\(s, recordedBefore\(i\)\)/.test(body));
-  check('the action is put into words', /BsrAppName\.actionWord\(s\.action\)/.test(body));
+  check('the action is put into words', /actionWord\(s\.action\)/.test(body));
   check('and the program is named only where it changes', /appChangedAt\(i\) \?/.test(body));
   check('the step before is found with isStep, the one definition of a step',
         /function recordedBefore[\s\S]{0,200}BsrSections\.isStep\(p\)/.test(renderer));
   // The line over the picture said the same things the list used to: the
   // engine's word for the action, and a row index where a step number belongs.
   check('the detail line puts the action into words',
-        /BsrAppName\.actionWord\(step\.action\)/.test(renderer));
+        /actionWord\(step\.action\)/.test(renderer));
   check('and numbers the step the way the list does',
         /filter\(\(s\) => BsrSections\.isStep\(s\)\)\.length;\s*\n\s*el\.meta\.textContent/.test(renderer));
 }
