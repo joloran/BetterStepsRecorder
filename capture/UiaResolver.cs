@@ -142,32 +142,14 @@ internal static class UiaResolver
     /// So the caller starts this first and collects it after the screenshot,
     /// which the query then overlaps rather than follows.
     /// </remarks>
-    internal static Task<TargetInfo?>? Begin(int x, int y, IntPtr window)
+    internal static Task<TargetInfo?>? Begin(int x, int y, IntPtr window, bool preferItem = true)
     {
         try
         {
             return Task.Run(() => InWindowTerms<TargetInfo?>(window, x, y, (wx, wy) =>
             {
                 var element = AutomationElement.FromPoint(new System.Windows.Point(wx, wy));
-                if (element is null) return null;
-
-                var info = element.Current;
-                var controlType = info.ControlType?.ProgrammaticName?.Replace("ControlType.", "");
-                var automationId = string.IsNullOrWhiteSpace(info.AutomationId) ? null : info.AutomationId;
-
-                // For text-entry controls the Name is often the field's contents,
-                // so it is checked against the value and dropped if it matches.
-                // The value is read only to make that comparison and is never
-                // stored or emitted.
-                var name = UiaNaming.SafeName(
-                    info.Name,
-                    UiaNaming.IsTextEntry(controlType) ? ValueOf(element) : null,
-                    info.IsPassword,
-                    controlType,
-                    LabelOf(element));
-
-                if (name is null && automationId is null && controlType is null) return null;
-                return new TargetInfo(name, controlType, automationId);
+                return Describe(element, preferItem);
             }));
         }
         catch
@@ -176,6 +158,49 @@ internal static class UiaResolver
             // windows. All expected; degrade to coordinates.
             return null;
         }
+    }
+
+    internal static TargetInfo? Describe(AutomationElement? element, bool preferItem = true)
+    {
+        if (element is null) return null;
+        var info = element.Current;
+
+        // Explorer's filename cell names its column; mouse actions target the file.
+        if (preferItem && !info.IsPassword && info.ControlType == ControlType.Edit
+            && info.AutomationId == "System.ItemNameDisplay")
+        {
+            try
+            {
+                var parent = element;
+                for (var hops = 0; hops < 4; hops++)
+                {
+                    parent = TreeWalker.RawViewWalker.GetParent(parent);
+                    if (parent is null) break;
+                    var row = parent.Current;
+                    if (row.ProcessId != info.ProcessId || row.ControlType == ControlType.Window
+                        || row.ControlType == ControlType.List || row.ControlType == ControlType.DataGrid
+                        || row.ControlType == ControlType.Table) break;
+                    if (row.ControlType == ControlType.ListItem || row.ControlType == ControlType.DataItem)
+                    {
+                        if (!row.IsPassword && !string.IsNullOrWhiteSpace(row.Name))
+                        {
+                            element = parent;
+                            info = row;
+                        }
+                        break;
+                    }
+                }
+            }
+            catch { /* keep the original cell if its row disappeared */ }
+        }
+
+        var controlType = info.ControlType?.ProgrammaticName?.Replace("ControlType.", "");
+        var automationId = string.IsNullOrWhiteSpace(info.AutomationId) ? null : info.AutomationId;
+        var name = UiaNaming.SafeName(info.Name,
+            UiaNaming.IsTextEntry(controlType) ? ValueOf(element) : null,
+            info.IsPassword, controlType, LabelOf(element));
+        if (name is null && automationId is null && controlType is null) return null;
+        return new TargetInfo(name, controlType, automationId);
     }
 
     /// <summary>

@@ -529,7 +529,13 @@ console.log('\nthe control is asked about in its window\'s own terms:');
         /finally \{ if \(previous != IntPtr\.Zero\) Win32\.SetThreadDpiAwarenessContext\(previous\); \}/.test(uia));
   const calls = [...recU.matchAll(/UiaResolver\.Begin\(([^)]*)\)/g)].map((m) => m[1]);
   check(`every lookup says which window it is asking about (${calls.length})`,
-        calls.length >= 3 && calls.every((a) => a.split(',').length === 3), calls.join(' | '));
+        calls.length >= 3 && calls.every((a) => {
+          const args = a.split(',').map((part) => part.trim());
+          return (args.length === 3 || args.length === 4) && /^(hwnd|under)$/.test(args[2])
+            && (args.length === 3 || args[3] === 'preferItem: false');
+        }), calls.join(' | '));
+  check('keyboard descriptions keep field context rather than the containing file',
+        /UiaResolver\.Begin\(point\.X, point\.Y, hwnd, preferItem: false\)/.test(recU));
 }
 
 console.log('\nthe control is asked about at the moment of the click:');

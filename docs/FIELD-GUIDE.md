@@ -25,6 +25,10 @@ Every action is captured with a screenshot, and named in words: *Clicked the
 "Save" button in "Billing"*. You press stop, tidy the result, and export it as a
 document somebody else can follow.
 
+In File Explorer, clicking a file names the file itself rather than its
+"Name" column ("Nome" in Portuguese). This applies to newly captured steps;
+an older step that already contains the column label can be re-recorded.
+
 It replaces `PSR.exe`, the Problem Steps Recorder that shipped with Windows for
 years and was removed. PSR was crude but genuinely useful, and nothing replaced
 it.
