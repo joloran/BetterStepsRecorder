@@ -17,6 +17,17 @@ before the change is considered done.
 
 ## 1. What this is
 
+**Explorer file targets.** For mouse actions, an `Edit` cell with the shell's
+`System.ItemNameDisplay` automation ID resolves to its nearest named
+`ListItem`/`DataItem` ancestor. The cell's name is a column label (for example,
+"Nome"), while the item's name identifies the file. Name, control type and
+automation ID all come from that item. The parent walk is bounded and stays in
+the same process; headers, grouping banners, unavailable/unnamed rows and
+password fields retain their original treatment. Keyboard context keeps the
+field rather than the row, and file names are never recovered by bypassing
+`UiaNaming.SafeName` with a raw field value. Existing recorded text is not
+migrated; affected steps can be re-recorded.
+
 **Interface localization.** English and Brazilian Portuguese are available in
 Settings, persisted as `language` alongside existing preferences. English is
 the default for older settings files. A shared, dependency-free UMD translator

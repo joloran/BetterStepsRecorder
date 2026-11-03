@@ -360,7 +360,7 @@ internal sealed class Recorder : IDisposable
         // Asked before the screenshot, collected after it. Typing rarely moves
         // anything under the pointer, but the two paths should agree about when
         // the question is asked.
-        var pending = UiaResolver.Begin(point.X, point.Y, hwnd);
+        var pending = UiaResolver.Begin(point.X, point.Y, hwnd, preferItem: false);
 
         var bounds = ScreenCapture.ResolveBounds(hwnd, point, _options.Frame);
         var seq = ++_seq;

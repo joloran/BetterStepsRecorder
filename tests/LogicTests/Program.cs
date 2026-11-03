@@ -81,6 +81,111 @@ Check("whitespace-only Name yields no label",
 Check("short values do not trigger the prefix rule",
     UiaNaming.SafeName("ID", "ID", false, "Edit", null) is null);
 
+Console.WriteLine("\nfile-name cells use the containing item, not the column label:");
+{
+    var ready = new ManualResetEventSlim();
+    System.Windows.Window? fixture = null;
+    Exception? fixtureError = null;
+    var fixtureHandle = IntPtr.Zero;
+    var uiThread = new Thread(() =>
+    {
+        try
+        {
+            var panel = new System.Windows.Controls.StackPanel();
+            var header = new System.Windows.Controls.GridViewColumnHeader { Content = "Nome", Height = 28 };
+            System.Windows.Automation.AutomationProperties.SetAutomationId(header, "System.ItemNameDisplay");
+            panel.Children.Add(header);
+            var list = new System.Windows.Controls.ListBox { HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch };
+            System.Windows.Controls.VirtualizingStackPanel.SetIsVirtualizing(list, false);
+            panel.Children.Add(list);
+            void Row(string id, string name, System.Windows.FrameworkElement child)
+            {
+                var row = new System.Windows.Controls.ListBoxItem { Content = child, Height = 38 };
+                System.Windows.Automation.AutomationProperties.SetName(row, name);
+                System.Windows.Automation.AutomationProperties.SetAutomationId(row, id);
+                list.Items.Add(row);
+            }
+            System.Windows.Controls.TextBox Cell(string id, string name) {
+                var cell = new System.Windows.Controls.TextBox { Text = "fixture value", IsReadOnly = true };
+                System.Windows.Automation.AutomationProperties.SetName(cell, name);
+                System.Windows.Automation.AutomationProperties.SetAutomationId(cell, id);
+                return cell;
+            }
+            Row("file-row", "relatorio-final.pdf", Cell("System.ItemNameDisplay", "Nome"));
+            Row("ordinary-row", "another-file.pdf", Cell("customer-field", "Customer"));
+            Row("unnamed-row", "   ", Cell("System.ItemNameDisplay", "Nome"));
+            var password = new System.Windows.Controls.PasswordBox { Password = "never-record-this" };
+            System.Windows.Automation.AutomationProperties.SetName(password, "Password");
+            System.Windows.Automation.AutomationProperties.SetAutomationId(password, "System.ItemNameDisplay");
+            Row("password-row", "sensitive-file.pdf", password);
+            panel.Children.Add(Cell("System.ItemNameDisplay", "Nome"));
+            fixture = new System.Windows.Window { Title = "File target regression fixture", Content = panel,
+                Width = 520, Height = 300, Left = -10000, Top = -10000,
+                ShowActivated = false, ShowInTaskbar = false };
+            fixture.ContentRendered += (_, _) => {
+                fixtureHandle = new System.Windows.Interop.WindowInteropHelper(fixture).Handle;
+                ready.Set();
+            };
+            fixture.Closed += (_, _) => System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvokeShutdown(
+                System.Windows.Threading.DispatcherPriority.Background);
+            fixture.Show();
+            System.Windows.Threading.Dispatcher.Run();
+        }
+        catch (Exception error) { fixtureError = error; ready.Set(); }
+    }) { IsBackground = true };
+    uiThread.SetApartmentState(ApartmentState.STA);
+    uiThread.Start();
+    try
+    {
+        var started = ready.Wait(TimeSpan.FromSeconds(10)) && fixtureError is null && fixtureHandle != IntPtr.Zero;
+        Check("the off-screen accessibility fixture starts", started);
+        if (fixtureError is not null) Console.WriteLine("    " + fixtureError.Message);
+        if (started)
+        {
+            var root = System.Windows.Automation.AutomationElement.FromHandle(fixtureHandle);
+            System.Windows.Automation.AutomationElement? Find(System.Windows.Automation.AutomationElement parent, string id) =>
+                parent.FindFirst(System.Windows.Automation.TreeScope.Descendants,
+                    new System.Windows.Automation.PropertyCondition(
+                        System.Windows.Automation.AutomationElement.AutomationIdProperty, id));
+            var fileRow = Find(root, "file-row");
+            var fileCell = fileRow is null ? null : Find(fileRow, "System.ItemNameDisplay");
+            var item = UiaResolver.Describe(fileCell);
+            Check("the file-name cell resolves to the file name", item?.Name == "relatorio-final.pdf");
+            Check("the item's type and automation ID stay together", item?.ControlType == "ListItem" && item.AutomationId == "file-row");
+            var fieldTarget = UiaResolver.Describe(fileCell, preferItem: false);
+            Check("keyboard context keeps the original field", fieldTarget?.Name == "Nome" && fieldTarget.ControlType == "Edit"
+                && fieldTarget.AutomationId == "System.ItemNameDisplay");
+            var ordinaryRow = Find(root, "ordinary-row");
+            var ordinary = UiaResolver.Describe(ordinaryRow is null ? null : Find(ordinaryRow, "customer-field"));
+            Check("an ordinary field inside a row keeps its own label", ordinary?.Name == "Customer" && ordinary.ControlType == "Edit");
+            var unnamedRow = Find(root, "unnamed-row");
+            var unnamed = UiaResolver.Describe(unnamedRow is null ? null : Find(unnamedRow, "System.ItemNameDisplay"));
+            Check("an unnamed containing item leaves the original target intact", unnamed?.Name == "Nome" && unnamed.ControlType == "Edit");
+            var passwordRow = Find(root, "password-row");
+            var secret = UiaResolver.Describe(passwordRow is null ? null : Find(passwordRow, "System.ItemNameDisplay"));
+            Check("a password field is never promoted or named from its contents", secret?.Name is null && secret?.ControlType == "Edit");
+            var column = UiaResolver.Describe(root.FindFirst(System.Windows.Automation.TreeScope.Descendants,
+                new System.Windows.Automation.PropertyCondition(
+                    System.Windows.Automation.AutomationElement.ControlTypeProperty,
+                    System.Windows.Automation.ControlType.HeaderItem)));
+            Check("a column header sharing the property ID remains a header", column?.Name == "Nome"
+                && column.ControlType == "HeaderItem" && column.AutomationId == "System.ItemNameDisplay");
+            var directCells = root.FindAll(System.Windows.Automation.TreeScope.Descendants,
+                new System.Windows.Automation.PropertyCondition(System.Windows.Automation.AutomationElement.AutomationIdProperty,
+                    "System.ItemNameDisplay"));
+            var standalone = UiaResolver.Describe(directCells[directCells.Count - 1]);
+            Check("a file-property field outside an item keeps its original target", standalone?.Name == "Nome" && standalone.ControlType == "Edit");
+            Check("an unavailable element remains optional", UiaResolver.Describe(null) is null);
+        }
+    }
+    finally
+    {
+        if (fixture is not null && uiThread.IsAlive && !fixture.Dispatcher.HasShutdownStarted)
+            _ = fixture.Dispatcher.BeginInvoke(new Action(() => fixture.Close()));
+        if (uiThread.Join(TimeSpan.FromSeconds(5))) ready.Dispose();
+    }
+}
+
 Console.WriteLine("");
 Console.WriteLine("capture scope:");
 
