@@ -3514,6 +3514,101 @@ app.whenReady().then(async () => {
         startup.language === 'pt-BR' && startup.selected === 'pt-BR'
         && startup.settings === 'Configurações' && startup.status === 'Pronto'
         && startup.scope === 'Capturar: Tudo', JSON.stringify(startup));
+
+  console.log('\nrecorded step titles use the selected language before editing:');
+  const stepTitles = await restarted.webContents.executeJavaScript(`(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const box = document.getElementById('detail-text');
+    const choose = async (language) => {
+      const selector = document.getElementById('set-language');
+      selector.value = language;
+      selector.dispatchEvent(new Event('change'));
+      for (let n = 0; n < 100 && document.documentElement.lang !== language; n++) await sleep(20);
+      await sleep(40);
+    };
+    const frame = { screenshot: 'steps/title.png',
+      point: { x: 100, y: 100 }, frame: { x: 0, y: 0, w: 600, h: 400 },
+      window: { title: 'Sample guide', process: 'sample.exe' } };
+    const first = { ...frame, id: 'title-tab', action: 'leftClick',
+      target: { name: 'Reports', controlType: 'TabItem' },
+      text: 'Clicked the "Reports" tab in "Sample guide"' };
+    const second = { ...frame, id: 'title-button', action: 'leftClick',
+      target: { name: 'Save', controlType: 'Button' },
+      text: 'Clicked the "Save" button in "Sample guide"' };
+    const authored = { ...second, id: 'title-authored', textEdited: true };
+    const blanks = [
+      { ...frame, id: 'title-photo', action: 'photo', text: '', textEdited: true, source: 'IMG_001.jpg' },
+      { id: 'title-note', action: 'note', text: '', textEdited: true },
+      { id: 'title-section', action: 'section', text: '', textEdited: true },
+    ];
+    const fixture = [first, second, authored, ...blanks];
+    const original = JSON.stringify(fixture);
+    await showOpened({ ok: true, dir: 'C:/fake/title-language', name: 'Title language',
+      steps: fixture });
+    const initial = { editor: box.value,
+      rows: [...document.querySelectorAll('#step-list .title')].map((node) => node.textContent),
+      unchanged: JSON.stringify(steps) === original };
+    const before = (await window.bsr.__updates()).length;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new Event('blur'));
+    await sleep(340);
+    const noOp = { updates: (await window.bsr.__updates()).length - before,
+      unchanged: JSON.stringify(steps) === original };
+    await choose('en');
+    const english = box.value;
+    await choose('pt-BR');
+    const portuguese = box.value;
+    const edit = box.value + ' — confira o relatório';
+    box.value = edit;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await choose('en');
+    const pendingSurvived = box.value === edit;
+    await flushText();
+    const saved = (await window.bsr.__updates()).slice(before);
+    const edited = { ...steps.find((step) => step.id === first.id) };
+    await choose('pt-BR');
+    const afterSave = box.value;
+    await select(authored.id);
+    const custom = box.value;
+    await choose('en');
+    const customEnglish = box.value;
+    await choose('pt-BR');
+    const blankEditors = [];
+    for (const blank of blanks) {
+      await select(blank.id);
+      blankEditors.push(box.value);
+    }
+    return { initial, noOp, english, portuguese, edit, pendingSurvived,
+      saved, edited, afterSave, custom, customEnglish, blankEditors };
+  })()`);
+  check('Portuguese opens generated step titles in both the list and editor',
+        stepTitles.initial.editor === 'Clicou na aba "Reports" em "Sample guide"'
+        && stepTitles.initial.rows[0] === stepTitles.initial.editor, JSON.stringify(stepTitles.initial));
+  check('the next generated row omits only the repeated window context',
+        stepTitles.initial.rows[1] === 'Clicou no botão "Save"', JSON.stringify(stepTitles.initial.rows));
+  check('showing translated titles leaves the recorded data intact', stepTitles.initial.unchanged);
+  check('an unchanged input and blur do not save a translation as authored text',
+        stepTitles.noOp.updates === 0 && stepTitles.noOp.unchanged, JSON.stringify(stepTitles.noOp));
+  check('switching language refreshes an untouched generated editor title',
+        stepTitles.english === 'Clicked the "Reports" tab in "Sample guide"'
+        && stepTitles.portuguese === stepTitles.initial.editor, JSON.stringify(stepTitles));
+  check('a pending Portuguese edit survives a language switch', stepTitles.pendingSurvived);
+  check('editing saves the displayed Portuguese wording and marks the local step authored',
+        stepTitles.saved.length === 1 && stepTitles.saved[0].patch.text === stepTitles.edit
+        && stepTitles.edited.textEdited === true && stepTitles.afterSave === stepTitles.edit,
+        JSON.stringify(stepTitles.saved));
+  const { toImperative } = require('../ui/src/main/export');
+  check('the actual exporter retains the saved Portuguese title',
+        toImperative(stepTitles.edited, 'imperative', 'pt-BR') === stepTitles.edit);
+  check('custom English wording is preserved in either interface language',
+        stepTitles.custom === 'Clicked the "Save" button in "Sample guide"'
+        && stepTitles.customEnglish === stepTitles.custom, JSON.stringify(stepTitles));
+  check('an uncaptioned photo retains its source filename in the step list',
+        stepTitles.initial.rows[3] === 'IMG_001.jpg', JSON.stringify(stepTitles.initial.rows));
+  check('empty photo captions, notes and section headings stay empty in the editor',
+        stepTitles.blankEditors.length === 3 && stepTitles.blankEditors.every((text) => text === ''),
+        JSON.stringify(stepTitles.blankEditors));
+
   const narrowLayout = await restarted.webContents.executeJavaScript(`(async () => {
     await showOpened(await window.bsr.openLibrary('C:/fake/session-1'));
     await new Promise((resolve) => setTimeout(resolve, 100));

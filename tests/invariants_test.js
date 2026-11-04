@@ -665,7 +665,8 @@ console.log('\nthe step list uses the wording rules, not the raw fields:');
   // repeats its window on every row and prints leftClick under it.
   const at = renderer.indexOf('function renderList()');
   const body = renderer.slice(at, renderer.indexOf('\n}\n', at));
-  check('a row title comes from rowTitle', /BsrAppName\.rowTitle\(s, recordedBefore\(i\)\)/.test(body));
+  check('a row title uses rowTitle with the selected language',
+        /BsrAppName\.rowTitle\(s, recordedBefore\(i\), BsrI18n\.getLocale\(\)\)/.test(body));
   check('the action is put into words', /actionWord\(s\.action\)/.test(body));
   check('and the program is named only where it changes', /appChangedAt\(i\) \?/.test(body));
   check('the step before is found with isStep, the one definition of a step',

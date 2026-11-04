@@ -4,7 +4,7 @@ const sections = require('../renderer/sections');
 const appName = require('../renderer/appname');
 const annotate = require('../renderer/annotate');
 const path = require('node:path');
-const { localizeStep, translator } = require('./export-language');
+const { localizeStep, translator } = require('../shared/step-language');
 
 /**
  * Turns a recording into something someone else can read.

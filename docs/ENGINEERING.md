@@ -35,7 +35,10 @@ and per-locale catalogs serve the isolated renderer and Electron main process
 without new renderer privileges or IPC channels. Semantic message keys, named
 parameters, locale-aware plurals and English fallback allow additional locales
 without changing capture or recording formats. Changes apply without reloading
-the editor. Exporters receive a snapshot of the selected language and localize
+the editor. The shared `step-language.js` recognizer localizes generated titles
+in the list and editable field without mutating the recording. Edits begin with
+the displayed wording and are persisted as authored text; pending edits survive
+locale changes. Exporters receive a snapshot of the selected language and localize
 generated descriptions, labels, metadata and bundled templates at render time.
 Stored descriptions, authored text and custom template prose keep their wording.
 The capture engine/protocol is unchanged. See [LOCALIZATION.md](LOCALIZATION.md)

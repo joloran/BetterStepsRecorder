@@ -34,7 +34,7 @@ const electron = {
 const modules = new Set(['./export', './latex', './texzip', './template', './docx',
   './templates-lib', './screenshots', './messages', './shortcuts',
   '../renderer/annotate', '../renderer/sections', '../renderer/appname',
-  '../shared/i18n', './export-language']);
+  '../shared/i18n', '../shared/step-language']);
 const sandbox = {
   require(name) {
     if (name === 'electron') return electron;

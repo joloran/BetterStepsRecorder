@@ -4,7 +4,7 @@ const sections = require('../renderer/sections');
 const appName = require('../renderer/appname');
 const path = require('node:path');
 const os = require('node:os');
-const { translator: createTranslator } = require('./export-language');
+const { translator: createTranslator } = require('../shared/step-language');
 
 /**
  * Renders a recording into someone else's document format.

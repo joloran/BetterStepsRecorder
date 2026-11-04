@@ -4,7 +4,7 @@ const sections = require('../renderer/sections');
 const appName = require('../renderer/appname');
 const path = require('node:path');
 const os = require('node:os');
-const { translator } = require('./export-language');
+const { translator } = require('../shared/step-language');
 
 /**
  * Renders a recording into a Word template.

@@ -180,5 +180,25 @@ console.log('\na row does not repeat the window the row above named:');
         a.rowTitle(mid, { window: w('Launcher') }) === 'Clicked "Meridian Sensor Setup"');
 }
 
+console.log('\nlocalized generated row titles:');
+{
+  const step = { action: 'leftClick', text: 'Clicked the "Save" button in "Billing"',
+    target: { name: 'Save', controlType: 'Button' }, window: { title: 'Billing' } };
+  const original = JSON.stringify(step);
+  check('Portuguese first row includes the translated window clause',
+        a.rowTitle(step, null, 'pt-BR') === 'Clicou no botão "Save" em "Billing"');
+  check('Portuguese repeat window suffix is suppressed',
+        a.rowTitle(step, step, 'pt-BR') === 'Clicou no botão "Save"');
+  check('a custom English title stays exactly as written',
+        a.rowTitle({ ...step, textEdited: true }, step, 'pt-BR') === step.text);
+  check('unknown grammar retains its existing window suppression',
+        a.rowTitle({ ...step, text: 'Custom words in "Billing"' }, step, 'pt-BR') === 'Custom words');
+  check('language fallback preserves the English title', a.rowTitle(step, null, 'xx') === step.text);
+  check('display does not mutate recorded data', JSON.stringify(step) === original);
+  check('blank authored rows stay blank for the caller to supply its fallback',
+        ['photo', 'note', 'section'].every((action) =>
+          a.rowTitle({ action, text: '', textEdited: true }, null, 'pt-BR') === ''));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
