@@ -138,8 +138,9 @@ machine — there is no account, no telemetry and no network use of any kind.
    record (kept in the past tense, because it describes what was done). Name it,
    pick a template, and scope it to one application if you want everything else
    kept off the record.
-2. Do the thing you are documenting. The window shrinks to a small floating
-   strip so it is not in your way. `Ctrl+Shift+F9` pauses, `Ctrl+Shift+F10`
+2. Do the thing you are documenting. The window shrinks to a fixed 280 × 64
+   floating control without a title bar: elapsed time, pause/resume and stop.
+   Drag its background to move it; pauses freeze the clock. `Ctrl+Shift+F9` pauses, `Ctrl+Shift+F10`
    stops, from wherever you are.
 3. **Edit** — reword steps, drag to reorder them, add written steps for the
    instructions that are not clicks, add headings to group them into phases,

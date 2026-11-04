@@ -161,11 +161,13 @@ function fitToDisplay(target) {
 
   const current = target.getBounds();
   const { workArea } = screen.getDisplayMatching(current);
-  const fitted = bounds.fit(current, workArea, MIN_SIZE);
+  const compact = target === win && Boolean(fullBounds);
+  const fitted = bounds.fit(current, workArea, compact ? COMPACT : MIN_SIZE);
 
   // Relax the minimum first: setBounds cannot go below it, so a window on a
   // display shorter than MIN_SIZE would be clamped straight back to too tall.
   target.setMinimumSize(fitted.minWidth, fitted.minHeight);
+  if (compact) target.setMaximumSize(fitted.width, fitted.height);
   if (bounds.differs(current, fitted)) {
     target.setBounds({ x: fitted.x, y: fitted.y,
                        width: fitted.width, height: fitted.height });
@@ -177,6 +179,7 @@ function createWindow() {
     ...defaultBounds(),
     minWidth: MIN_SIZE.width,
     minHeight: MIN_SIZE.height,
+    frame: false,
     backgroundColor: '#16171b',
     title: 'Steps Recorder',
     icon: path.join(__dirname, '..', '..', 'build', 'icon.ico'),
@@ -403,8 +406,9 @@ process.on('exit', () => { if (sidecar) sidecar.kill(); });
 // window shrinks to a floating strip and returns afterwards. PSR did this and
 // it is the reason it felt usable despite everything else about it.
 
-const COMPACT = { width: 360, height: 132 };
+const COMPACT = { width: 280, height: 64 };
 let fullBounds = null;
+let fullMaximized = false;
 let engineBuild = null;
 
 // The name this application chose when a recording started, kept only in memory.
@@ -456,17 +460,25 @@ function logRecordingEnd(reason) {
 
 function enterCompact() {
   if (!win || fullBounds) return;
-  fullBounds = win.getBounds();
+  const currentBounds = win.getBounds();
+  fullBounds = win.getNormalBounds();
+  fullMaximized = win.isMaximized();
+  if (fullMaximized) win.unmaximize();
+  if (win.isMinimized()) win.restore();
 
   // The display the window is on, not the primary one: otherwise the strip
   // teleports across and lands on top of the application being recorded.
-  const { workArea } = screen.getDisplayMatching(fullBounds);
-  win.setMinimumSize(280, 110);
+  const { workArea } = screen.getDisplayMatching(currentBounds);
+  win.setMinimumSize(COMPACT.width, COMPACT.height);
+  win.setMaximumSize(COMPACT.width, COMPACT.height);
+  win.setResizable(false);
+  win.setMaximizable(false);
   win.setBounds({
     ...COMPACT,
     x: workArea.x + workArea.width - COMPACT.width - 24,
     y: workArea.y + 24,
   });
+  fitToDisplay(win);
   win.setAlwaysOnTop(true, 'floating');
   // Left out of every screen copy while it floats there. The capture engine
   // copies the screen at the moment of each click, and this strip is always on
@@ -476,6 +488,7 @@ function enterCompact() {
   win.setContentProtection(true);
   send('mode', { compact: true });
   win.webContents.invalidate();
+  win.showInactive();
 }
 
 function leaveCompact() {
@@ -483,12 +496,18 @@ function leaveCompact() {
   win.setAlwaysOnTop(false);
   // And put back in, or the editor would vanish from somebody's screen share.
   win.setContentProtection(false);
+  win.setMaximumSize(0, 0);
+  win.setResizable(true);
+  win.setMaximizable(true);
   win.setMinimumSize(MIN_SIZE.width, MIN_SIZE.height);
   win.setBounds(fullBounds);
   fullBounds = null;
   // A recording can outlast a monitor: the bounds saved on the way in may now
   // be on a display that is no longer there.
   fitToDisplay(win);
+  if (fullMaximized) win.maximize();
+  fullMaximized = false;
+  win.show();
   send('mode', { compact: false });
 
   // The layout is correct after this resize but the compositor is not: the
@@ -824,6 +843,16 @@ async function startFromHotkey() {
 // mode is a property of the UI, so it must not be exitable only through paths
 // that happen to know about the capture engine.
 ipcMain.handle('ui:restore', () => { leaveCompact(); return { ok: true }; });
+
+ipcMain.handle('ui:window', (_e, action) => {
+  if (!win || win.isDestroyed() || fullBounds) return { ok: false };
+  if (action === 'minimize') win.minimize();
+  else if (action === 'maximize') {
+    if (win.isMaximized()) win.unmaximize(); else win.maximize();
+  } else if (action === 'close') win.close();
+  else return { ok: false };
+  return { ok: true };
+});
 
 ipcMain.handle('recording:pause', () => {
   // The window is not the only way in, and a pause with nothing recording

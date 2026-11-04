@@ -34,6 +34,24 @@ body {
   user-select: none;
 }
 
+.windowbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 30px;
+  padding-left: 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  -webkit-app-region: drag;
+}
+.window-actions { display: flex; height: 30px; -webkit-app-region: no-drag; }
+.window-actions button {
+  width: 44px; padding: 0; border: 0; border-radius: 0;
+  background: transparent; font-size: 17px; line-height: 1;
+}
+.window-actions button[data-window-action="close"]:hover { background: #c42b1c; color: white; }
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -382,35 +400,49 @@ button.tiny {
 .compactbar {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  grid-template-areas: "dot state count" "dot elapsed count" "actions actions actions";
+  grid-template-areas: "dot elapsed actions" "dot state actions";
   align-items: center;
-  gap: 8px 10px;
-  padding: 12px 14px;
+  gap: 0 10px;
+  height: 100%;
+  padding: 9px 12px;
+  -webkit-app-region: drag;
 }
 .compactbar[hidden] { display: none; }
 #c-dot { grid-area: dot; }
-.c-state { grid-area: state; font-weight: 600; }
-.c-count { grid-area: count; color: var(--muted); font-size: 12px; align-self: start; }
+.c-state { grid-area: state; color: var(--muted); font-size: 11px; line-height: 16px; }
+.c-count { display: none; }
 .c-elapsed { grid-area: elapsed; }
-/* The program in front cannot be seen. It takes the elapsed line's place rather
-   than adding a row: the strip is 132 pixels tall, and a warning that wrapped
-   would push Pause and Stop off the bottom of it - the two buttons somebody who
-   has just read "not recording" most wants. The full sentence is its tooltip. */
+/* A warning replaces the state label; the clock and controls remain visible. */
 .c-blocked {
-  grid-area: elapsed;
+  grid-area: state;
+  -webkit-app-region: no-drag;
   min-width: 0;
   color: #e5a13a;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 16px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .c-blocked[hidden] { display: none; }
-.compactbar.blocked .c-elapsed { display: none; }
+.compactbar.blocked .c-state { visibility: hidden; }
 .compactbar.blocked #c-dot { background: #e5a13a; }
-.c-actions { grid-area: actions; display: flex; gap: 8px; }
-.c-actions button { flex: 1; padding: 7px 0; }
+.c-actions { grid-area: actions; display: flex; gap: 6px; -webkit-app-region: no-drag; }
+.c-actions button {
+  display: grid; place-items: center;
+  width: 36px; height: 36px; padding: 0; font-size: 0;
+}
+#c-pause::before {
+  content: ""; width: 9px; height: 12px;
+  border-left: 3px solid currentColor; border-right: 3px solid currentColor;
+}
+#c-pause.resume::before {
+  width: 0; height: 0; margin-left: 3px;
+  border: 6px solid transparent; border-left: 10px solid currentColor; border-right: 0;
+}
+#c-stop::before { content: ""; width: 11px; height: 11px; background: currentColor; border-radius: 1px; }
 
+body.compact .windowbar,
 body.compact .toolbar,
 body.compact main,
 body.compact .savebar { display: none; }
@@ -538,7 +570,10 @@ footer .hint .sep { color: var(--line); margin: 0 4px; }
 .k-error[hidden] { display: none; }
 
 /* Elapsed time while recording, in the strip where it can be seen. */
-.c-elapsed { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+.c-elapsed {
+  font-variant-numeric: tabular-nums; font-size: 20px; line-height: 24px;
+  font-weight: 600; letter-spacing: .5px;
+}
 
 /* An advisory strip under the toolbar. Deliberately not a dialog: it reports
    something worth knowing, not something that must be answered. */

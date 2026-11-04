@@ -6,6 +6,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   return {
   "ui.app.title": "Steps Recorder",
+  "ui.window.minimize": "Minimizar",
+  "ui.window.maximize": "Maximizar ou restaurar",
+  "ui.window.close": "Fechar aplicativo",
   "ui.common.recording": "Gravando",
   "ui.common.pause": "Pausar",
   "ui.common.stop": "Parar",

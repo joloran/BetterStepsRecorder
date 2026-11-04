@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('bsr', {
   resumeRecording: () => ipcRenderer.invoke('recording:resume'),
   stopRecording: () => ipcRenderer.invoke('recording:stop'),
   restoreWindow: () => ipcRenderer.invoke('ui:restore'),
+  windowAction: (action) => ipcRenderer.invoke('ui:window', action),
 
   getSession: () => ipcRenderer.invoke('session:get'),
   openSession: () => ipcRenderer.invoke('session:open'),
