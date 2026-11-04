@@ -115,11 +115,23 @@ let state = 'idle';   // idle | recording | paused
 
 // ---- rendering --------------------------------------------------------------
 
+for (const button of document.querySelectorAll('[data-window-action]')) {
+  button.addEventListener('click', () => window.bsr.windowAction(button.dataset.windowAction));
+}
+
+function paintPauseButton() {
+  const label = state === 'paused' ? tr('state.resume') : tr('state.pause');
+  el.cPause.textContent = label;
+  el.cPause.title = label;
+  el.cPause.setAttribute('aria-label', label);
+  el.cPause.classList.toggle('resume', state === 'paused');
+}
+
 function setState(next) {
   state = next;
   el.cDot.className = 'dot ' + (next === 'recording' ? 'rec' : next === 'paused' ? 'paused' : 'idle');
   el.cState.textContent = next === 'paused' ? tr('state.paused') : tr('state.recording');
-  el.cPause.textContent = next === 'paused' ? tr('state.resume') : tr('state.pause');
+  paintPauseButton();
   el.dot.className = 'dot ' + (next === 'recording' ? 'rec' : next === 'paused' ? 'paused' : 'idle');
   paintStatus();
 
@@ -4273,7 +4285,7 @@ function applyLanguage(language) {
   BsrI18n.translatePage(document);
   el.language.value = BsrI18n.getLocale();
   el.cState.textContent = state === 'paused' ? tr('state.paused') : tr('state.recording');
-  el.cPause.textContent = state === 'paused' ? tr('state.resume') : tr('state.pause');
+  paintPauseButton();
   el.scopeBtn.textContent = tr('scope.capture', {
     scope: scopeLabel(state !== 'idle' && recordingScope ? recordingScope : scopeChoice.label),
   });

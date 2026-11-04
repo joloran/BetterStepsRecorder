@@ -8,6 +8,14 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body data-drop-photos-label="Drop the photos to add them" data-i18n-data-drop-photos-label="ui.steps.dropPhotos">
+  <div class="windowbar">
+    <span data-i18n="ui.app.title">Steps Recorder</span>
+    <div class="window-actions">
+      <button data-window-action="minimize" title="Minimize" aria-label="Minimize" data-i18n-title="ui.window.minimize" data-i18n-aria-label="ui.window.minimize">&#x2212;</button>
+      <button data-window-action="maximize" title="Maximize or restore" aria-label="Maximize or restore" data-i18n-title="ui.window.maximize" data-i18n-aria-label="ui.window.maximize">&#x25a1;</button>
+      <button data-window-action="close" title="Close application" aria-label="Close application" data-i18n-title="ui.window.close" data-i18n-aria-label="ui.window.close">&#xd7;</button>
+    </div>
+  </div>
   <div id="compactbar" class="compactbar" hidden>
     <span id="c-dot" class="dot rec"></span>
     <span id="c-state" class="c-state" data-i18n="ui.common.recording">Recording</span>
@@ -17,7 +25,7 @@
     <span id="c-blocked" class="c-blocked" hidden></span>
     <div class="c-actions">
       <button id="c-pause" data-i18n="ui.common.pause">Pause</button>
-      <button id="c-stop" class="danger" data-i18n="ui.common.stop">Stop</button>
+      <button id="c-stop" class="danger" data-i18n="ui.common.stop" title="Stop" aria-label="Stop" data-i18n-title="ui.common.stop" data-i18n-aria-label="ui.common.stop">Stop</button>
     </div>
   </div>
 

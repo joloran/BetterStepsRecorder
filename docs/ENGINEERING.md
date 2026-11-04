@@ -44,6 +44,15 @@ Stored descriptions, authored text and custom template prose keep their wording.
 The capture engine/protocol is unchanged. See [LOCALIZATION.md](LOCALIZATION.md)
 for conventions and validation.
 
+**Recording control.** The existing window uses a frameless shell with editor
+window controls, hidden during recording. Compact mode locks it to 280 × 64
+device-independent pixels, with a draggable background, elapsed clock and
+accessible pause/resume and stop icons. It retains one renderer and the existing
+timer/state/shortcut handlers. Compact bounds survive display changes; stopping
+restores the editor's size, resize controls and prior maximized state. Capture
+protection still excludes the floating control from screenshots. The allowlisted
+`ui:window` channel only operates the editor's minimize/maximize/close controls.
+
 A Windows screen-capture tool that turns a task performed on screen into a
 document somebody else can follow. A replacement for the deprecated
 `PSR.exe`.
@@ -1035,10 +1044,9 @@ front.** So the engine watches that:
   the way out, never repeated between.
 
 **The window says it where it will be read.** On the recording strip, in place of
-the elapsed time - *Can't see Hypack64: running as administrator* - because the
-strip is the only thing on screen during a recording. It takes the elapsed
-line's place rather than adding a row: the strip is 132 pixels tall, and a
-warning that wrapped would push Pause and Stop out of it, which are the two
+the state label - *Can't see Hypack64: running as administrator* - because the
+strip is the only thing on screen during a recording. The 280 × 64 control keeps
+its clock visible, and a warning that wrapped would push Pause and Stop out of it, which are the two
 buttons somebody who has just read "not recording" most wants. It stays on one
 line and shortens with an ellipsis; the full sentence is its tooltip. And a
 notice is left in the notice bar, hidden while the strip is up, for when the
@@ -1051,7 +1059,7 @@ administrator will not let a lesser one read.
 Proved: `Privilege.CannotSee` against real processes in LogicTests - this one,
 File Explorer, `services.exe` (SYSTEM on every machine, so always above the
 test), and a process that has already exited; a window test that raises the
-message on a 360-pixel strip and checks the strip is no taller, Stop is still
+message on the 280 × 64 control and checks the strip is no taller, Stop is still
 inside it, and the warning clears; invariants for the rest. The window test
 uses a long program name on purpose: *Hypack64* happens to fit on the strip's
 one line, and with it a warning allowed to wrap passed every check. With a

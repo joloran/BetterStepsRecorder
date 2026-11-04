@@ -1356,7 +1356,7 @@ app.whenReady().then(async () => {
         `${strip.low.buried} handle(s) under the strip`);
 
   // HYPACK started with Run as administrator produced no steps and no message.
-  // The strip now says so - and it is 132 pixels tall, so the check that matters
+  // The strip now says so - and it is 64 pixels tall, so the check that matters
   // most is that saying so does not push Pause and Stop out of it.
   console.log('\nthe strip says when it cannot see the program in front:');
   const shut = await win.webContents.executeJavaScript(`(async () => {
@@ -1369,7 +1369,8 @@ app.whenReady().then(async () => {
     // The strip as it is while recording.
     document.body.classList.add('compact');
     bar.hidden = false;
-    bar.style.width = '360px';
+    bar.style.width = '280px';
+    bar.style.height = '64px';
     elapsed.textContent = '00:42';
     await sleep(60);
     const before = { height: Math.round(bar.getBoundingClientRect().height) };
@@ -1384,7 +1385,11 @@ app.whenReady().then(async () => {
       shown: !line.hidden && getComputedStyle(line).display !== 'none',
       text: line.textContent,
       tooltip: line.title,
-      elapsedHidden: getComputedStyle(elapsed).display === 'none',
+      elapsedVisible: getComputedStyle(elapsed).display !== 'none',
+      titlebarHidden: getComputedStyle(document.querySelector('.windowbar')).display === 'none',
+      drag: getComputedStyle(bar).webkitAppRegion,
+      buttonsClickable: getComputedStyle(document.querySelector('.c-actions')).webkitAppRegion === 'no-drag',
+      clockInside: elapsed.getBoundingClientRect().right < stop.getBoundingClientRect().left,
       height: Math.round(b.height),
       stopInside: s.top >= b.top - 1 && s.bottom <= b.bottom + 1 && s.height > 0,
       oneLine: Math.round(line.getBoundingClientRect().height) <= 20,
@@ -1402,6 +1407,7 @@ app.whenReady().then(async () => {
     document.body.classList.remove('compact');
     bar.hidden = true;
     bar.style.width = '';
+    bar.style.height = '';
     elapsed.textContent = '';
     document.getElementById('notice-close').click();
     await sleep(60);
@@ -1411,7 +1417,11 @@ app.whenReady().then(async () => {
   check('the strip names the program it cannot see', shut.during.shown && /NmeaBridgeAcquisitionService64/.test(shut.during.text),
         JSON.stringify(shut.during.text));
   check('and says why', /administrator/.test(shut.during.text));
-  check('in place of the elapsed time, not beside it', shut.during.elapsedHidden);
+  check('the clock stays visible during a capture warning', shut.during.elapsedVisible);
+  check('the compact surface has no titlebar and can be dragged without blocking buttons',
+        shut.during.titlebarHidden && shut.during.drag === 'drag' && shut.during.buttonsClickable);
+  check('the clock and controls fit side by side at 280 by 64',
+        shut.before.height === 64 && shut.during.clockInside, JSON.stringify(shut.during));
   check('on one line', shut.during.oneLine);
   check('without making the strip any taller', shut.during.height === shut.before.height,
         `${shut.before.height}px -> ${shut.during.height}px`);
