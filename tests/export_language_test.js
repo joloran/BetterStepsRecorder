@@ -1,6 +1,6 @@
 /** Generated capture grammar, including legacy recordings and privacy boundaries. */
 const assert = require('node:assert/strict');
-const { localizeStep } = require('../ui/src/main/export-language');
+const { localizeStep } = require('../ui/src/shared/step-language');
 const { toImperative } = require('../ui/src/main/export');
 let pass = 0;
 function check(name, test) { test(); pass++; console.log('  PASS ' + name); }

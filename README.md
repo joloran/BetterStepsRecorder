@@ -159,8 +159,9 @@ Settings.
 
 The interface is available in English and Brazilian Portuguese. Choose
 **Settings → Language → Português (Brasil)**; the choice applies immediately
-and is remembered. Exported instructions and document labels follow the selected
-language. Authored content and captured application/control names keep their
+and is remembered. Generated titles in the step list and editor, exported
+instructions and document labels follow the selected language. Editing a title
+starts from its displayed translation. Authored content and captured application/control names keep their
 original wording; stored recordings are never rewritten by a language change.
 See [docs/LOCALIZATION.md](docs/LOCALIZATION.md) for adding another language.
 

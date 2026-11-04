@@ -1,9 +1,12 @@
 /**
- * Localize the capture engine's generated grammar at export time. The stored
- * recording stays a faithful record. Names, typed values and authored wording
+ * Localize the capture engine's generated grammar for the editor and exports.
+ * The stored recording stays a faithful record. Names, typed values and authored wording
  * are data, never translation keys. No network service is involved.
  */
-const i18n = require('../shared/i18n');
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./i18n'));
+  else root.BsrStepLanguage = factory(root.BsrI18n);
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (i18n) {
 const translator = (language) => i18n.createTranslator(language);
 const NO_TARGET = new Set(['Window', 'Pane', 'TitleBar']);
 const NOUNS = {
@@ -45,7 +48,7 @@ function legacyTarget(what) {
   return null;
 }
 
-/** null delegates to the existing English imperative converter. */
+/** null leaves English display or imperative conversion to the caller. */
 function localizeStep(step, voice = 'imperative', language = 'en') {
   const t = translator(language);
   if (t.locale === 'en') return null;
@@ -112,4 +115,5 @@ function localizeStep(step, voice = 'imperative', language = 'en') {
   return t(`export.mouse.${action}.${tense}`, { target: translatedTarget, where });
 }
 
-module.exports = { translator, localizeStep };
+return { translator, localizeStep };
+}));

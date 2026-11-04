@@ -33,7 +33,7 @@ const {
 } = require('./export');
 const sections = require('../renderer/sections');
 const appName = require('../renderer/appname');
-const { translator } = require('./export-language');
+const { translator } = require('../shared/step-language');
 
 /**
  * The ten characters TeX reserves, plus four that are legal but come out wrong.

@@ -17,10 +17,11 @@
  * "chrome.exe".
  */
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === 'object' && module.exports
+    ? require('../shared/step-language') : root.BsrStepLanguage);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BsrAppName = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (stepLanguage) {
 
   /**
    * Only where the filename tells a person nothing, and only Windows' own.
@@ -190,13 +191,16 @@
    * Only ever for the list. The recording and every export keep the full text.
    * Never touched when a person wrote the wording.
    */
-  function rowTitle(step, prev) {
-    const text = String((step && step.text) || '');
+  function rowTitle(step, prev, language = 'en') {
+    if (!step || !step.text) return '';
+    const localized = stepLanguage.localizeStep(step, 'past', language);
+    const text = localized ?? String(step.text || '');
     if (!text || step.textEdited) return text;
     const here = step.window && step.window.title;
     const before = prev && prev.window && prev.window.title;
     if (!here || here !== before) return text;
-    const tail = ` in "${here}"`;
+    const tail = localized === null ? ` in "${here}"`
+      : stepLanguage.translator(language)('export.windowSuffix', { title: here });
     if (!text.endsWith(tail)) return text;
     // Dropped whatever is left in front of it - a bare verb included. Two
     // earlier guards kept the window when the rest looked too thin to stand

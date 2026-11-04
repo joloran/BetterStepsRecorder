@@ -6,7 +6,8 @@ existing `settings.json`. Existing installations continue in English. An
 unknown or invalid saved language falls back to English.
 
 The setting covers the application's controls, accessible labels, dynamic
-status messages, native file dialogs and exported documents. HTML, PDF,
+status messages, generated step titles in the list and editor, native file
+dialogs and exported documents. HTML, PDF,
 Markdown, Word, template exports and LaTeX/Overleaf documents use the selected
 language for generated descriptions, labels, legends and metadata. Procedures
 use instructions; evidence records use the past tense in the selected language.
@@ -19,7 +20,11 @@ engine's known grammar and structured target/window data. Authored notes,
 headings, edited descriptions, typed values, application/control names and
 custom template prose keep their original content. Unrecognized legacy wording
 is preserved. This is an offline document renderer, not a general translation
-service for arbitrary user-authored text.
+service for arbitrary user-authored text. Editing a generated title starts from
+the displayed translation and saves the edited wording as authored text, which
+exports preserve exactly. Changing the language updates untouched generated
+titles without overwriting pending or saved edits. Earlier titles already
+edited in English remain authored text and need to be rewritten manually.
 
 ## Architecture
 
@@ -35,8 +40,10 @@ Each locale has four flat catalogs under `ui/src/shared/locales/`:
 - `main.js`: native dialogs, notifications and main-process errors.
 - `export.js`: generated document descriptions, labels, metadata and grammar.
 
-`ui/src/main/export-language.js` recognizes the capture engine's generated
-sentences, then formats them with locale messages. Every exporter receives an
+`ui/src/shared/step-language.js` recognizes the capture engine's generated
+sentences, then formats them with locale messages in both Node and the isolated
+renderer. The editor displays the past tense of the recorded action; exports
+use the recording's chosen voice. Every exporter receives an
 explicit `language` option, defaulting to English for existing callers. New
 languages can add bundled templates under `templates/<locale>/`; only known
 built-in template paths are mapped to these variants. User copies are kept.

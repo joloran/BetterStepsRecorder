@@ -1,7 +1,8 @@
 const tr = (key, params) => BsrI18n.t(`renderer.${key}`, params);
 
-// Labels derived from protocol identifiers belong to the interface. Recorded
-// wording and product names continue to come from the recording unchanged.
+// Translate generated wording at presentation time; authored wording stays as written.
+const stepText = (step) => step.text
+  ? BsrStepLanguage.localizeStep(step, 'past', BsrI18n.getLocale()) ?? step.text : '';
 const actionWord = (action) => ['leftClick', 'rightClick', 'doubleClick', 'drag', 'keyPress', 'photo'].includes(action)
   ? tr(`action.${action}`) : BsrAppName.actionWord(action);
 const colourName = (colour) => {
@@ -351,7 +352,7 @@ function renderList() {
       ? (s.text || '').trim() || tr('section.untitled')
       // A photograph with no caption yet shows the name its camera gave it,
       // which is the only thing distinguishing thirty of them in a list.
-      : BsrAppName.rowTitle(s, recordedBefore(i))
+      : BsrAppName.rowTitle(s, recordedBefore(i), BsrI18n.getLocale())
         || (s.action === 'photo' ? s.source || tr('action.photo') : actionWord(s.action));
 
     const v = s.verify;
@@ -430,7 +431,7 @@ async function select(id) {
   if (!step) return;
 
   showPane('step');
-  el.text.value = step.text || '';
+  el.text.value = stepText(step);
   el.exclude.checked = !!step.excluded;
 
   const isSection = BsrSections.isSection(step);
@@ -1344,14 +1345,22 @@ async function flushText() {
   const step = steps.find((s) => s.id === pending.id);
   if (!step) return;
   step.text = pending.text;
+  step.textEdited = true;
   await window.bsr.updateStep(pending.id, { text: pending.text });
   renderList();
 }
 
 el.text.addEventListener('input', () => {
   if (!selectedId) return;
-  pendingText = { id: selectedId, text: el.text.value };
+  const step = steps.find((s) => s.id === selectedId);
+  if (!step) return;
   clearTimeout(saveTimer);
+  if (el.text.value === stepText(step)) {
+    pendingText = null;
+    saveTimer = null;
+    return;
+  }
+  pendingText = { id: selectedId, text: el.text.value };
   // Debounced: every keystroke would otherwise rewrite session.json.
   saveTimer = setTimeout(flushText, 300);
 });
@@ -4258,6 +4267,8 @@ el.scale.addEventListener('change', async () => {
 
 /** Repaint presentation only: all fields, selections and pending edits survive. */
 function applyLanguage(language) {
+  const step = steps.find((item) => item.id === selectedId);
+  const refreshText = step && !pendingText && el.text.value === stepText(step);
   BsrI18n.setLocale(language);
   BsrI18n.translatePage(document);
   el.language.value = BsrI18n.getLocale();
@@ -4268,8 +4279,10 @@ function applyLanguage(language) {
   });
   renderList();
   paintFindCount();
-  const step = steps.find((item) => item.id === selectedId);
-  if (step) paintStepLabels(step);
+  if (step) {
+    if (refreshText) el.text.value = stepText(step);
+    paintStepLabels(step);
+  }
   const mark = selectedMark();
   if (mark) paintMarkLabels(mark);
   paintBlocked(blockedState, { notice: false });

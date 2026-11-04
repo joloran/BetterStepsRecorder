@@ -25,7 +25,7 @@ const sandbox = {
     if (name === 'electron') return electron;
     if (name === './history') return { History: class { clear() {} } };
     if (name === './log') return { info() {}, warn() {}, error() {} };
-    if (name === './export-language' || name === '../shared/i18n' || name === './messages' || name === './shortcuts'
+    if (name === '../shared/step-language' || name === '../shared/i18n' || name === './messages' || name === './shortcuts'
         || name.startsWith('node:')) return realRequire(name);
     return {};
   },
