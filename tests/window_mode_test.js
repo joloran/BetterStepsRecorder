@@ -35,7 +35,12 @@ class Window {
   setBounds(value) { this.bounds = { ...value }; if (!this.maximized) this.normal = { ...value }; }
   setMinimumSize(...value) { this.minimum = value; }
   setMaximumSize(...value) { this.maximum = value; }
-  setResizable(value) { this.resizable = value; }
+  setResizable(value) {
+    // Electron on Windows restores the constraints cached when resizing was disabled.
+    if (!value && this.resizable) this.cachedMaximum = [...this.maximum];
+    if (value && !this.resizable) this.maximum = [...this.cachedMaximum];
+    this.resizable = value;
+  }
   setMaximizable(value) { this.maximizable = value; }
   setAlwaysOnTop(value) { this.onTop = value; }
   setContentProtection(value) { this.protected = value; }

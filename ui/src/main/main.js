@@ -496,10 +496,11 @@ function leaveCompact() {
   win.setAlwaysOnTop(false);
   // And put back in, or the editor would vanish from somebody's screen share.
   win.setContentProtection(false);
-  win.setMaximumSize(0, 0);
   win.setResizable(true);
   win.setMaximizable(true);
   win.setMinimumSize(MIN_SIZE.width, MIN_SIZE.height);
+  // On Windows, re-enabling resizing restores its cached compact constraints.
+  win.setMaximumSize(0, 0);
   win.setBounds(fullBounds);
   fullBounds = null;
   // A recording can outlast a monitor: the bounds saved on the way in may now
